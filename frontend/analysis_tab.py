@@ -152,7 +152,9 @@ def _render_sharepoint_jd_panel():
             jd_obj = next(j for j in my_jds if j.get("display_name", j["name"]) == sel)
             if st.button("📥 Load this JD", key="load_my_jd"):
                 text = download_jd_from_sharepoint(
-                    jd_obj["download_url"], file_type=jd_obj.get("file_type", "txt")
+                    jd_obj["download_url"],
+                    file_type=jd_obj.get("file_type", "txt"),
+                    config=st.session_state.get("sharepoint_config"),
                 )
                 if text:
                     st.session_state["active_jd_text"] = text
@@ -180,7 +182,9 @@ def _render_sharepoint_jd_panel():
             with col_load:
                 if st.button("📥 Load this JD", key="load_other_jd"):
                     text = download_jd_from_sharepoint(
-                        jd_obj["download_url"], file_type=jd_obj.get("file_type", "txt")
+                        jd_obj["download_url"],
+                        file_type=jd_obj.get("file_type", "txt"),
+                        config=st.session_state.get("sharepoint_config"),
                     )
                     if text:
                         st.session_state["active_jd_text"] = text
@@ -272,7 +276,7 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
     raw_results.sort(key=lambda x: x["final_score"], reverse=True)
     st.session_state.review_results = raw_results
 
-    # Phase 2: Pre-generate docs 
+    # Phase 2: Pre-generate docs
     status_box2 = st.empty()
     progress2   = st.progress(0)
     for idx, item in enumerate(raw_results):

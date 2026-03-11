@@ -232,7 +232,7 @@ def upload_jd_to_sharepoint(config: dict, jd_text: str, filename: str,
     """
     Save a job description as a .txt file to SharePoint JD folder.
     With SSO, ownership is tracked automatically by SharePoint via the
-    user's Microsoft account
+    user's Microsoft account.
     The 'uploaded_by' param is kept for backward compatibility but ignored.
     """
     try:
@@ -273,14 +273,13 @@ def list_jds_from_sharepoint(config: dict) -> list:
         uploader = _make_uploader(config)
         folder   = config.get("jd_folder_path", JD_FOLDER)
 
-        site_id  = config["site_id"]
-        drive_id = config["drive_id"]
+        site_id    = config["site_id"]
+        drive_id   = config["drive_id"]
         clean_path = folder.strip("/")
         url = (
             f"https://graph.microsoft.com/v1.0/sites/{site_id}"
             f"/drives/{drive_id}/root:/{clean_path}:/children"
-            f"?$select=id,name,file,createdDateTime,createdBy,lastModifiedBy,"
-            f"@microsoft.graph.downloadUrl"
+            f"?$select=id,name,file,createdDateTime,createdBy,lastModifiedBy"
         )
 
         all_items = []
@@ -300,6 +299,7 @@ def list_jds_from_sharepoint(config: dict) -> list:
             if not any(name.lower().endswith(ext) for ext in SUPPORTED):
                 continue
 
+            # Real owner from Graph API — lastModifiedBy is preferred
             modified_by = item.get("lastModifiedBy", {}).get("user", {})
             created_by  = item.get("createdBy",       {}).get("user", {})
 
@@ -308,6 +308,7 @@ def list_jds_from_sharepoint(config: dict) -> list:
             owner_name  = (modified_by.get("displayName") or
                            created_by.get("displayName")  or "Unknown")
 
+            # Strip old filename prefix if present
             if "__" in name:
                 _, display_name = name.split("__", 1)
             else:
@@ -316,12 +317,17 @@ def list_jds_from_sharepoint(config: dict) -> list:
             jds.append({
                 "name":         name,
                 "display_name": display_name,
-                "owner_email":  owner_email.lower(),  
+                "owner_email":  owner_email.lower(),   # match against SSO email
                 "owner_name":   owner_name,
                 "file_type":    name.rsplit(".", 1)[-1].lower(),
                 "item_id":      item.get("id", ""),
                 "created_at":   item.get("createdDateTime", ""),
-                "download_url": item.get("@microsoft.graph.downloadUrl", ""),
+                # Build a stable download URL from item id — does not expire,
+                # works with app-only auth, no $select issue.
+                "download_url": (
+                    f"https://graph.microsoft.com/v1.0/sites/{site_id}"
+                    f"/drives/{drive_id}/items/{item.get('id', '')}/content"
+                ),
             })
         return jds
     except Exception as e:
@@ -329,13 +335,25 @@ def list_jds_from_sharepoint(config: dict) -> list:
         return []
 
 
-def download_jd_from_sharepoint(download_url: str, file_type: str = "txt") -> str:
+def download_jd_from_sharepoint(download_url: str, file_type: str = "txt",
+                                config: dict = None) -> str:
     """
     Download a JD file and return its text content.
     Handles .txt, .pdf, and .docx so manually uploaded JDs work too.
     """
     try:
-        response = requests.get(download_url)
+        if not download_url:
+            st.error("Could not download JD: download URL is empty.")
+            return ""
+
+        # Graph API /content URLs require Bearer auth
+        # Pre-signed @microsoft.graph.downloadUrl do not — handle both
+        headers = {}
+        if config and "/graph.microsoft.com/" in download_url:
+            uploader = _make_uploader(config)
+            headers  = uploader._headers()
+
+        response = requests.get(download_url, headers=headers, allow_redirects=True)
         response.raise_for_status()
 
         file_type = file_type.lower().strip(".")
@@ -388,7 +406,7 @@ def list_resumes_by_uploader(config: dict, current_user: str) -> dict:
       - 'my_resumes':        uploaded by current_user
       - 'other_resumes':     uploaded by everyone else
     Returns dict with both lists.
-    current_user should match the displayName from Azure AD (e.g. "John Smith").
+    current_user should match the displayName from Azure AD.
     """
     try:
         uploader = _make_uploader(config)
@@ -415,7 +433,10 @@ def list_resumes_by_uploader(config: dict, current_user: str) -> dict:
                 "item_id":      item.get("id", ""),
                 "created_by":   created_by,
                 "created_at":   item.get("createdDateTime", ""),
-                "download_url": item.get("@microsoft.graph.downloadUrl", ""),
+                "download_url": (
+                    f"https://graph.microsoft.com/v1.0/sites/{site_id}"
+                    f"/drives/{drive_id}/items/{item.get('id', '')}/content"
+                ),
             }
 
             if current_user and created_by.lower() == current_user.lower():
