@@ -1,0 +1,53 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# .gitignore — NexTA
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Secrets / credentials — NEVER commit these ────────────────────────────────
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# ── Streamlit secrets (used on Streamlit Cloud) ───────────────────────────────
+.streamlit/secrets.toml
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Test / temp outputs ───────────────────────────────────────────────────────
+*.docx
+*.pptx
+*.csv
+!templates/word_template.docx
+!templates/sample_ppt_template.pptx
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
