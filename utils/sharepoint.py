@@ -1,5 +1,5 @@
 """
-SharePoint Integration Module
+SharePoint Integration Module - Updated with Microsoft Graph API (MSAL)
 Uses App-Only authentication via Azure AD for robust enterprise connectivity.
 """
 
@@ -9,7 +9,7 @@ import os
 import requests
 from datetime import datetime
 
-# ── Dependency Check
+# Dependency Check
 SHAREPOINT_AVAILABLE = False
 SHAREPOINT_ERROR = None
 
@@ -90,7 +90,7 @@ class SharePointUploader:
             f"/drives/{drive_id}/root:/{clean_path}:/children"
         )
 
-        # FIX 1: Collect ALL pages — Graph API paginates at 100 items by default.
+        # Collect ALL pages — Graph API paginates at 100 items by default.
         # Without this, only the first 100 files are fetched, and repeated calls
         # to the same page can cause apparent duplicates.
         all_items = []
@@ -105,7 +105,7 @@ class SharePointUploader:
         # Keep only files (not folders)
         files = [i for i in all_items if "file" in i]
 
-        # FIX 2: Deduplicate by filename — keeps the first occurrence only.
+        # Deduplicate by filename — keeps the first occurrence only.
         # Pagination overlap or the same file appearing via multiple paths
         # can cause the same resume to appear more than once.
         seen = set()
@@ -196,7 +196,7 @@ def download_from_sharepoint(config: dict) -> list:
                 continue
 
             content = uploader.download_file(dl_url)
-            timestamp = item.get("createdDateTime", datetime.now().isoformat())
+            timestamp = (item.get("lastModifiedDateTime") or item.get("createdDateTime") or datetime.now().isoformat())
             downloaded.append({"name": name, "content": content, "timestamp": timestamp})
 
         return downloaded
@@ -273,7 +273,6 @@ def list_jds_from_sharepoint(config: dict) -> list:
         uploader = _make_uploader(config)
         folder   = config.get("jd_folder_path", JD_FOLDER)
 
-        # Use $select to fetch the lastModifiedBy field which contains the real email
         site_id  = config["site_id"]
         drive_id = config["drive_id"]
         clean_path = folder.strip("/")
@@ -301,8 +300,6 @@ def list_jds_from_sharepoint(config: dict) -> list:
             if not any(name.lower().endswith(ext) for ext in SUPPORTED):
                 continue
 
-            # Real owner from Graph API — lastModifiedBy is preferred
-            # (handles cases where someone edits a JD after upload)
             modified_by = item.get("lastModifiedBy", {}).get("user", {})
             created_by  = item.get("createdBy",       {}).get("user", {})
 
@@ -319,7 +316,7 @@ def list_jds_from_sharepoint(config: dict) -> list:
             jds.append({
                 "name":         name,
                 "display_name": display_name,
-                "owner_email":  owner_email.lower(),   # match against SSO email
+                "owner_email":  owner_email.lower(),  
                 "owner_name":   owner_name,
                 "file_type":    name.rsplit(".", 1)[-1].lower(),
                 "item_id":      item.get("id", ""),
