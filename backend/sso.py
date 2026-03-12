@@ -2,6 +2,16 @@
 backend/sso.py
 Microsoft SSO Authentication
 
+HOW THE FLOW WORKS
+──────────────────
+1. User opens the app → not authenticated → "Sign in with Microsoft" button shown.
+2. Clicking the button redirects the browser to Microsoft login.
+3. User signs in with their company Microsoft account.
+4. Microsoft redirects back to the app's redirect URI with ?code=<short_lived_code>.
+5. The app exchanges that code for tokens using MSAL.
+6. The id_token contains verified claims: name, email, etc.
+7. We store those claims in st.session_state — the user is now authenticated.
+
 """
 
 import os
@@ -45,18 +55,24 @@ def _msal_app(cfg: dict):
     )
 
 
+# Only non-reserved scopes — MSAL adds openid/profile/offline_access automatically
 _SCOPES = ["User.Read"]
 
 
 # Public API 
 
 def get_auth_url() -> str:
-    """Return the Microsoft login URL to redirect the user to."""
-    cfg = _cfg()
-    return _msal_app(cfg).get_authorization_request_url(
-        scopes=_SCOPES,
-        redirect_uri=cfg["redirect_uri"],
-    )
+    """
+    Return the Microsoft login URL.
+
+    """
+    if "sso_auth_url" not in st.session_state:
+        cfg = _cfg()
+        st.session_state["sso_auth_url"] = _msal_app(cfg).get_authorization_request_url(
+            scopes=_SCOPES,
+            redirect_uri=cfg["redirect_uri"],
+        )
+    return st.session_state["sso_auth_url"]
 
 
 def exchange_code(code: str) -> dict | None:
@@ -120,16 +136,33 @@ def render_sso_login() -> bool:
     # Microsoft redirected back with ?code= 
     code = st.query_params.get("code")
     if code:
+        # Guard: if we're already processing a code, don't process again
+        if st.session_state.get("sso_code_processing"):
+            return False
+
+        st.session_state["sso_code_processing"] = True
+
         with st.spinner("Completing sign-in…"):
             token_resp = exchange_code(code)
+
         if token_resp:
             user = _user_from_token(token_resp)
             st.session_state["logged_in"]    = True
             st.session_state["user_name"]    = user["name"]
             st.session_state["user_email"]   = user["email"]
             st.session_state["access_token"] = token_resp.get("access_token", "")
-            st.query_params.clear()   # remove ?code= from URL
+            # Clear the cached auth URL so a fresh one is generated next login
+            st.session_state.pop("sso_auth_url", None)
+            st.session_state.pop("sso_code_processing", None)
+            # Clear ?code= from URL then rerun into the authenticated app
+            st.query_params.clear()
             st.rerun()
+        else:
+            # Exchange failed — reset so user can try again
+            st.session_state.pop("sso_code_processing", None)
+            st.session_state.pop("sso_auth_url", None)
+            st.query_params.clear()
+
         return False
 
     # Not logged in — show sign-in screen 
@@ -152,7 +185,6 @@ def render_sso_login() -> bool:
     _, col, _ = st.columns([1, 1.4, 1])
     with col:
         auth_url = get_auth_url()
-        # Render as a styled anchor tag — target="_self" keeps it in the same tab
         st.markdown(
             f'<a href="{auth_url}" target="_self" style="text-decoration:none;color:white;">'
             '<div style="background:#464EB8;color:white;font-weight:700;'
@@ -184,6 +216,7 @@ def render_user_badge():
         unsafe_allow_html=True,
     )
     if st.sidebar.button("🚪 Sign Out", use_container_width=True):
-        for k in ["logged_in", "user_name", "user_email", "access_token"]:
+        for k in ["logged_in", "user_name", "user_email", "access_token",
+                  "sso_auth_url", "sso_code_processing"]:
             st.session_state.pop(k, None)
         st.rerun()
