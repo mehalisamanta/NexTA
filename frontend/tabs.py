@@ -81,7 +81,7 @@ def render_upload_tab():
                             if start_date <= fdate <= end_date:
                                 filtered.append(f)
                         except Exception:
-                            filtered.append(f) 
+                            filtered.append(f)  
                     total_before     = len(downloaded_files)
                     downloaded_files = filtered
                     st.info(
@@ -99,35 +99,46 @@ def render_upload_tab():
                     st.session_state.resume_metadata = {}
                     seen_names = set()
 
+                    failed_files = []
+
                     for idx, file_data in enumerate(downloaded_files):
                         status.text(f"Reading: {file_data['name']}")
                         text = extract_text_from_file(file_data)
-                        if text:
-                            upload_date = file_data.get("timestamp", datetime.now().isoformat())
-                            if isinstance(upload_date, str):
-                                try:
-                                    upload_date = datetime.fromisoformat(
-                                        upload_date.replace("Z", "+00:00")
-                                    ).strftime("%Y-%m-%d %H:%M:%S")
-                                except Exception:
-                                    upload_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        if not text:
+                            failed_files.append((file_data["name"], "Could not extract text"))
+                            progress.progress((idx + 1) / len(downloaded_files))
+                            continue
 
-                            parsed = parse_resume_with_openai(
-                                client, text, file_data["name"], mask_pii_enabled, upload_date
-                            )
-                            if parsed:
-                                cname = parsed.get("name", "").strip().lower()
-                                if cname and cname in seen_names:
-                                    progress.progress((idx + 1) / len(downloaded_files))
-                                    continue
-                                if cname:
-                                    seen_names.add(cname)
-                                st.session_state.parsed_resumes.append(parsed)
-                                st.session_state.resume_texts[parsed.get("name", "")] = text
-                                st.session_state.resume_metadata[parsed.get("name", "")] = {
-                                    "submission_date": upload_date,
-                                    "filename": file_data["name"],
-                                }
+                        upload_date = file_data.get("timestamp", datetime.now().isoformat())
+                        if isinstance(upload_date, str):
+                            try:
+                                upload_date = datetime.fromisoformat(
+                                    upload_date.replace("Z", "+00:00")
+                                ).strftime("%Y-%m-%d %H:%M:%S")
+                            except Exception:
+                                upload_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                        parsed = parse_resume_with_openai(
+                            client, text, file_data["name"], mask_pii_enabled, upload_date
+                        )
+                        if not parsed:
+                            failed_files.append((file_data["name"], "AI parsing returned no data"))
+                            progress.progress((idx + 1) / len(downloaded_files))
+                            continue
+
+                        cname = parsed.get("name", "").strip().lower()
+                        if cname and cname in seen_names:
+                            failed_files.append((file_data["name"], "Duplicate candidate name"))
+                            progress.progress((idx + 1) / len(downloaded_files))
+                            continue
+                        if cname:
+                            seen_names.add(cname)
+                        st.session_state.parsed_resumes.append(parsed)
+                        st.session_state.resume_texts[parsed.get("name", "")] = text
+                        st.session_state.resume_metadata[parsed.get("name", "")] = {
+                            "submission_date": upload_date,
+                            "filename": file_data["name"],
+                        }
                         progress.progress((idx + 1) / len(downloaded_files))
 
                     status.empty()
@@ -137,10 +148,16 @@ def render_upload_tab():
                         st.session_state.candidates_df = pd.DataFrame(
                             st.session_state.parsed_resumes
                         )
+                        parsed_count = len(st.session_state.parsed_resumes)
+                        total_count  = len(downloaded_files)
                         st.success(
-                            f"📥 {len(st.session_state.parsed_resumes)} resumes ready — "
+                            f"📥 {parsed_count} of {total_count} resumes parsed successfully — "
                             "go to **Candidate Review & Scoring** to continue."
                         )
+                        if failed_files:
+                            with st.expander(f"⚠️ {len(failed_files)} file(s) could not be processed"):
+                                for fname, reason in failed_files:
+                                    st.markdown(f"- **{fname}** — {reason}")
                 elif not downloaded_files:
                     st.warning("No PDF or Word files found in the configured SharePoint folder.")
 
@@ -320,7 +337,7 @@ def render_analytics_tab():
                 y=skill_names[::-1], x=skill_pcts[::-1], orientation="h",
                 marker=dict(
                     color=skill_pcts[::-1], colorscale="Tealgrn", showscale=True,
-                    colorbar=dict(title="% of Candidates", titleside="right", ticksuffix="%"),
+                    colorbar=dict(title=dict(text="% of Candidates", side="right"), ticksuffix="%"),
                 ),
                 text=[f"{p:.1f}%" for p in skill_pcts[::-1]], textposition="outside",
                 hovertext=hover_texts[::-1],

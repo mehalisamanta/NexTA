@@ -154,11 +154,11 @@ def render_sso_login() -> bool:
         auth_url = get_auth_url()
         # Render as a styled anchor tag — target="_self" keeps it in the same tab
         st.markdown(
-            f'<a href="{auth_url}" target="_self" style="text-decoration:none;">'
-            '<div style="background:#0078D4;color:white;font-weight:700;'
-            'font-size:1.05rem;text-align:center;padding:14px 20px;'
+            f'<a href="{auth_url}" target="_self" style="text-decoration:none;color:white;">'
+            '<div style="background:#464EB8;color:white;font-weight:700;'
+            'font-size:1.25rem;text-align:center;padding:14px 20px;'
             'border-radius:8px;cursor:pointer;margin-top:8px;">'
-            "🔐 &nbsp; Sign in with Microsoft"
+            "&nbsp; Sign in with Microsoft"
             "</div></a>",
             unsafe_allow_html=True,
         )
