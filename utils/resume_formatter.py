@@ -8,10 +8,114 @@ import io
 import os
 import json
 import copy
+import time
+import importlib
+
 import streamlit as st
-from docx import Document
-from docx.oxml.ns import qn
+
 from backend.openai_client import create_openai_completion
+
+
+def _agent_debug_log(message: str, data: dict | None = None, hypothesis_id: str = "H1") -> None:
+    """
+    Append a minimal NDJSON debug log line for this session.
+
+    Used to understand which `docx` implementation is being imported and from
+    where, to diagnose the `Document` import failure.
+    """
+
+    # #region agent log
+    try:
+        payload = {
+            "sessionId": "ab086e",
+            "runId": "pre-fix",
+            "hypothesisId": hypothesis_id,
+            "location": "utils/resume_formatter.py:25",
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        line = json.dumps(payload, separators=(",", ":")) + "\n"
+        with open(
+            "/Users/rishiraj/Desktop/New folder/.cursor/debug-ab086e.log",
+            "a",
+            encoding="utf-8",
+        ) as fp:
+            fp.write(line)
+    except Exception:
+        # Logging must never break app startup.
+        pass
+    # #endregion
+
+
+def _import_docx_document():
+    """
+    Import `Document` and `qn` from the correct `python-docx` package.
+
+    Handles the case where an older `docx` package shadows `python-docx` by
+    trying multiple import paths and logging what happens.
+    """
+
+    try:
+        import docx as docx_mod  # type: ignore[import]
+    except Exception as e:
+        _agent_debug_log(
+            "failed to import top-level docx module",
+            {"error": repr(e)},
+            hypothesis_id="H1",
+        )
+        raise
+
+    docx_file = getattr(docx_mod, "__file__", None)
+    _agent_debug_log(
+        "imported docx module",
+        {"docx_file": docx_file, "has_Document_attr": hasattr(docx_mod, "Document")},
+        hypothesis_id="H1",
+    )
+
+    # First, try the standard python-docx entrypoint.
+    try:
+        from docx import Document  # type: ignore[import]
+
+        _agent_debug_log(
+            "resolved Document from docx __init__",
+            {"source": "docx.__init__"},
+            hypothesis_id="H1",
+        )
+    except Exception as e_init:
+        _agent_debug_log(
+            "failed to import Document from docx __init__",
+            {"error": repr(e_init)},
+            hypothesis_id="H1",
+        )
+        # Fallback: some installations expose Document via docx.api
+        try:
+            from docx.api import Document  # type: ignore[import]
+
+            _agent_debug_log(
+                "resolved Document from docx.api",
+                {"source": "docx.api"},
+                hypothesis_id="H1",
+            )
+        except Exception as e_api:
+            _agent_debug_log(
+                "failed to import Document from docx.api as well",
+                {"error": repr(e_api)},
+                hypothesis_id="H1",
+            )
+            raise ImportError(
+                "Could not import Document from python-docx. "
+                "You may have the legacy 'docx' package installed; "
+                "uninstall it with 'pip uninstall docx' and ensure "
+                "'python-docx' is installed in this environment."
+            ) from e_api
+
+    from docx.oxml.ns import qn  # type: ignore[import]
+
+    return Document, qn
+
+
+Document, qn = _import_docx_document()
 
 
 # Template path 
