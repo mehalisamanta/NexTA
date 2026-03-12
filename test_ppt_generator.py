@@ -1,14 +1,10 @@
 import os
 import sys
-import openai  # Added OpenAI import
 
 # Ensure the project root is in the path so 'utils' can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from utils.ppt_generator import generate_candidate_ppt
-
-# Initialize your OpenAI client (Ensure your API key is set in your environment)
-client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 candidate_data = {
     # Slide 1: Profile
@@ -56,40 +52,36 @@ candidate_data = {
         "Supported data scientists in deploying HIPAA-compliant ML models"
     ],
 
-    # Slide 5: Project 4 (Testing VERY Long Text to trigger AI refinement and Font Scaling)
+    # Slide 5: Project 4 (Testing Long Text & Auto-fit)
     "PROJECT4_NAME": "Legacy ERP Optimization Project",
     "DURATION_PROJECT4": "Aug 2017 – May 2018",
     "ROLE_PROJECT4": "Junior Data Engineer",
     "Project4_Description": (
         "This project involved a massive overhaul of an aging ERP system. It required "
         "extensive manual mapping of ancient database schemas to modern relational "
-        "structures to ensure zero data loss during the transition to the cloud. We also "
-        "had to ensure that all legacy reports were migrated without any discrepancy in figures."
+        "structures to ensure zero data loss during the transition to the cloud."
     ),
     "project4_bullets": [
         "Reverse-engineered undocumented SQL Server stored procedures",
         "Wrote 200+ Python scripts for automated data cleaning and deduplication",
         "Improved query response times by 80% through index optimization",
         "Collaborated with cross-functional teams to define data governance policies",
-        "Created comprehensive technical documentation for the new schema architecture",
-        "Optimized database performance by restructuring existing data pipelines"
+        "Created comprehensive technical documentation for the new schema architecture"
     ]
 }
 
 def main():
-    print("⏳ Generating Extended PPT with AI Refinement...")
-    
-    # PASSING THE CLIENT: This is the key change to trigger AI integration
-    ppt_bytes = generate_candidate_ppt(candidate_data, openai_client=client)
+    print("⏳ Generating Extended PPT...")
+    ppt_bytes = generate_candidate_ppt(candidate_data)
 
     if ppt_bytes:
-        output_path = "test_candidate_output_refined.pptx"
+        output_path = "test_candidate_output_full.pptx"
         with open(output_path, "wb") as f:
             f.write(ppt_bytes)
         print(f"✅ Success! File saved as: {output_path}")
-        print("💡 Check Slide 5: The AI should have summarized the text and limited bullets to 3.")
+        print("💡 Check Slide 5 to see if the long descriptions fit correctly.")
     else:
-        print("❌ Failed to generate PPT. Ensure your OPENAI_API_KEY is valid.")
+        print("❌ Failed to generate PPT. Check for errors in the console.")
 
 if __name__ == "__main__":
     main()
