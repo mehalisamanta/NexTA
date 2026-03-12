@@ -1,0 +1,95 @@
+import os
+import sys
+import openai  # Added OpenAI import
+
+# Ensure the project root is in the path so 'utils' can be imported
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from utils.ppt_generator import generate_candidate_ppt
+
+# Initialize your OpenAI client (Ensure your API key is set in your environment)
+client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+candidate_data = {
+    # Slide 1: Profile
+    "FULL_NAME": "John Michael Doe",
+    "CURRENT_ROLE": "Senior Data Engineer & Cloud Architect",
+    "PROFESSIONAL_SUMMARY": (
+        "Versatile Data Engineer with over 8 years of experience in architecting "
+        "large-scale data systems. Expert in AWS ecosystem, real-time stream processing, "
+        "and optimizing multi-terabyte data warehouses for Fortune 500 clients."
+    ),
+    "EDUCATION_DETAILS": "Master of Science in Data Science - Stanford University (2017)\nB.Tech in CS - IIT Delhi (2015)",
+    "TECHNICAL_SKILLS": "Python, PySpark, AWS (Glue, Lambda, Redshift), Kafka, Snowflake, Airflow, Terraform, Docker",
+
+    # Slide 2: Project 1
+    "PROJECT1_NAME": "Global Data Lake Migration",
+    "DURATION_PROJECT1": "Jan 2022 – Present",
+    "ROLE_PROJECT1": "Principal Architect",
+    "Project1_Description": "Leading the migration of 500TB of on-premise Hadoop data to a centralized AWS S3 Data Lake.",
+    "project1_bullets": [
+        "Architected serverless ETL framework using AWS Glue and Step Functions",
+        "Implemented Delta Lake for ACID transactions on S3",
+        "Reduced annual infrastructure costs by $1.2M",
+        "Established CI/CD pipelines for data infrastructure using Terraform"
+    ],
+
+    # Slide 3: Project 2
+    "PROJECT2_NAME": "High-Frequency Trading Pipeline",
+    "DURATION_PROJECT2": "Mar 2020 – Dec 2021",
+    "ROLE_PROJECT2": "Senior Data Engineer",
+    "Project2_Description": "Developed a low-latency streaming platform for real-time transaction analysis.",
+    "project2_bullets": [
+        "Built Kafka-Streams application processing 1M events per second",
+        "Integrated Kinesis Firehose for cold storage archival",
+        "Achieved sub-50ms end-to-end latency for fraud triggers"
+    ],
+
+    # Slide 4: Project 3
+    "PROJECT3_NAME": "Healthcare Analytics Platform",
+    "DURATION_PROJECT3": "June 2018 – Feb 2020",
+    "ROLE_PROJECT3": "Data Engineer",
+    "Project3_Description": "Centralized patient record system across 50+ hospital branches for predictive diagnostics.",
+    "project3_bullets": [
+        "Normalized heterogeneous data sources into a unified FHIR format",
+        "Developed Airflow DAGs for daily batch synchronization",
+        "Supported data scientists in deploying HIPAA-compliant ML models"
+    ],
+
+    # Slide 5: Project 4 (Testing VERY Long Text to trigger AI refinement and Font Scaling)
+    "PROJECT4_NAME": "Legacy ERP Optimization Project",
+    "DURATION_PROJECT4": "Aug 2017 – May 2018",
+    "ROLE_PROJECT4": "Junior Data Engineer",
+    "Project4_Description": (
+        "This project involved a massive overhaul of an aging ERP system. It required "
+        "extensive manual mapping of ancient database schemas to modern relational "
+        "structures to ensure zero data loss during the transition to the cloud. We also "
+        "had to ensure that all legacy reports were migrated without any discrepancy in figures."
+    ),
+    "project4_bullets": [
+        "Reverse-engineered undocumented SQL Server stored procedures",
+        "Wrote 200+ Python scripts for automated data cleaning and deduplication",
+        "Improved query response times by 80% through index optimization",
+        "Collaborated with cross-functional teams to define data governance policies",
+        "Created comprehensive technical documentation for the new schema architecture",
+        "Optimized database performance by restructuring existing data pipelines"
+    ]
+}
+
+def main():
+    print("⏳ Generating Extended PPT with AI Refinement...")
+    
+    # PASSING THE CLIENT: This is the key change to trigger AI integration
+    ppt_bytes = generate_candidate_ppt(candidate_data, openai_client=client)
+
+    if ppt_bytes:
+        output_path = "test_candidate_output_refined.pptx"
+        with open(output_path, "wb") as f:
+            f.write(ppt_bytes)
+        print(f"✅ Success! File saved as: {output_path}")
+        print("💡 Check Slide 5: The AI should have summarized the text and limited bullets to 3.")
+    else:
+        print("❌ Failed to generate PPT. Ensure your OPENAI_API_KEY is valid.")
+
+if __name__ == "__main__":
+    main()
