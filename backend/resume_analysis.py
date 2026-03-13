@@ -1,5 +1,5 @@
 """
-utils/resume_analysis.py
+backend/resume_analysis.py
 Resume Quality Analysis — checks for career gaps, anomalies, concerns.
 
 """

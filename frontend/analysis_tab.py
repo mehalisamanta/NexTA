@@ -8,16 +8,16 @@ import json
 from datetime import datetime
 import streamlit as st
 import pandas as pd
-from utils.resume_analysis import ResumeAnalyzer
-from utils.file_handlers import extract_text_from_file
-from utils.resume_formatter import (
+from backend.resume_analysis import ResumeAnalyzer
+from backend.file_handlers import extract_text_from_file
+from backend.resume_formatter import (
     extract_detailed_resume_data,
     check_template_completeness,
     generate_resume_docx,
 )
-from utils.ppt_generator import generate_candidate_ppt
-from utils.template_mapper import map_to_template_format
-from utils.sharepoint import (
+from backend.ppt_generator import generate_candidate_ppt
+from backend.template_mapper import map_to_template_format
+from backend.sharepoint import (
     SHAREPOINT_AVAILABLE,
     upload_jd_to_sharepoint,
     list_jds_from_sharepoint,

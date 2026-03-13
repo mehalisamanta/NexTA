@@ -5,7 +5,7 @@ import streamlit as st
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_AUTO_SIZE
-from utils.ppt_template_mapper import map_to_ppt_format
+from backend.ppt_template_mapper import map_to_ppt_format
 
 TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
