@@ -27,6 +27,8 @@ EVALUATION CHECKLIST:
    seem realistic (e.g., 10 years in a technology only 3 years old).
 4. OVERLAPPING DATES: Identify overlapping employment dates or suspicious claims.
 5. EXPERTISE AREAS: List primary areas of expertise and domain knowledge.
+6. CONTACT INFORMATION: Check if phone number and email address are present. 
+   If missing, indicate as "missing".
 
 Resume Text:
 {resume_text[:8000]}
@@ -39,6 +41,7 @@ Return ONLY a valid JSON object with this exact structure:
     "technical_anomalies": ["anomaly description 1"],
     "fake_indicators": ["concern description 1"],
     "domain_knowledge": ["expertise area 1", "expertise area 2"],
+    "missing_contact_info": ["phone", "email"], 
     "summary": "brief overall assessment"
 }}
 

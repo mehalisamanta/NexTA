@@ -504,6 +504,7 @@ def _render_score_breakdown(final_score, breakdown, reason):
 def _render_quality_section(analysis):
     st.markdown("---")
     st.markdown("#### 📋 Resume Quality Check")
+
     if analysis.get("is_previous_employee"):
         st.info(f"ℹ️ **Worked at NexTurn before:** {analysis.get('nexturn_history_details','Yes')}")
 
@@ -544,15 +545,25 @@ def _render_quality_section(analysis):
                 unsafe_allow_html=True,
             )
 
+    # Work history
     gaps = analysis.get("career_gaps", [])
     yellow_bullets("Gaps in work history", gaps) if gaps else green_box("Work history", "No major gaps found")
 
+    # Technical anomalies
     tech = analysis.get("technical_anomalies", [])
     yellow_bullets("Things to double-check", tech) if tech else green_box("Experience details", "Everything looks consistent")
 
+    # Fake indicators
     concerns = analysis.get("fake_indicators", [])
     if concerns:
         yellow_bullets("Points that need a closer look", concerns)
+
+    # NEW: Missing contact info
+    missing_contact = analysis.get("missing_contact_info", [])
+    if missing_contact:
+        yellow_bullets("Missing Contact Information", missing_contact)
+    else:
+        green_box("Contact Information", "Phone number and email are present")
 
 
 def _render_doc_buttons(client, name, meta, idx):
