@@ -202,11 +202,6 @@ def main():
                     )
                 with c2:
                     end_date = st.date_input("To", value=today, key="date_to")
-                    if st.button("📅 Set to Today", key="end_date_today_btn",
-                                 use_container_width=True, help="Set end date to today"):
-                        st.session_state["date_to"] = today
-                        end_date = today
-                        st.rerun()
 
                 if start_date and end_date:
                     if start_date > end_date:

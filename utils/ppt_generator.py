@@ -1,224 +1,212 @@
 """
-PPT Generator 
+PPT Generator
 
 """
 
 import io
 import os
-import re
-
+import copy
 import streamlit as st
+
 from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.util import Pt
+from pptx.oxml.ns import qn
+from lxml import etree
 
 from utils.template_mapper import map_to_template_format
 
 TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "templates", "sample_ppt_template.pptx",
+    "templates", "sample_ppt_template.pptx"
 )
 
-# Position thresholds in EMU (1 inch = 914 400 EMU)
-_1_IN = 914_400
-_5_IN = 5 * _1_IN
+RED   = RGBColor(0xFF, 0x00, 0x00)
+BLACK = RGBColor(0x00, 0x00, 0x00)
 
 
-# Low-level helpers 
+# Helpers
 
-def _set_para(para, text: str) -> None:
-    """
-    Write text into the first run of a paragraph, blank all other runs.
-    Preserves the original run's font, size, bold and colour exactly.
-    Creates a run if the paragraph has none.
-    """
-    if not para.runs:
-        para.add_run().text = text
-        return
-    para.runs[0].text = text
-    for run in para.runs[1:]:
-        run.text = ""
+def _set_run_text(run, text, missing=False):
+    """Set run text; mark red+bold if missing."""
+    run.text = text if text else "Information Missing"
+    if missing or not text:
+        run.font.color.rgb = RED
+        run.font.bold = True
 
 
-# Slide 1: profile 
+def _safe_write(para, text, missing=False):
+    """Write text to first run of a paragraph safely."""
+    if para.runs:
+        _set_run_text(para.runs[0], text, missing)
+        # clear extra runs
+        for r in para.runs[1:]:
+            r._r.getparent().remove(r._r)
 
-def _fill_slide1(slide, d: dict) -> None:
-    full_name  = (d.get("FULL_NAME") or "").strip()
-    role       = (d.get("CURRENT_ROLE") or "").strip()
-    summary    = (d.get("PROFESSIONAL_SUMMARY") or "").strip()
-    education  = (d.get("EDUCATION_DETAILS") or "").strip()
 
-    # Skills: accept comma-separated string or list
-    raw_skills = d.get("TECHNICAL_SKILLS") or ""
-    if isinstance(raw_skills, list):
-        skill_lines = [s.strip() for s in raw_skills if str(s).strip()]
-    else:
-        skill_lines = [s.strip() for s in str(raw_skills).split(",") if s.strip()]
+# Slide 1: Profile
 
-    # Split summary into individual sentences for multi-paragraph slots
-    sentences = re.split(r'(?<=[.!?])\s+', summary)
-    sentences = [s.strip() for s in sentences if s.strip()]
+def _populate_slide1(slide, d):
+    name    = d.get("FULL_NAME")            or ""
+    role    = d.get("CURRENT_ROLE")         or ""
+    summary = d.get("PROFESSIONAL_SUMMARY") or ""
+    edu     = d.get("EDUCATION_DETAILS")    or ""
+
+    # Build skill lines from tech_stack / skills
+    skills_raw = d.get("TECHNICAL_SKILLS") or ""
 
     for shape in slide.shapes:
         if not shape.has_text_frame:
             continue
-
         sname = shape.name
-        tf    = shape.text_frame
 
-        # Name / Role header 
+        # Name/role header (Google Shape with candidate name)
         if "Google Shape" in sname or "g86061" in sname:
-            header = f"{full_name}– {role} " if role else f"{full_name} "
-            if tf.paragraphs and tf.paragraphs[0].runs:
-                tf.paragraphs[0].runs[0].text = header
-                for run in tf.paragraphs[0].runs[1:]:
-                    run.text = ""
+            paras = shape.text_frame.paragraphs
+            # Template has 3 paragraphs: "Prasad", "Chittiboina", "– Senior..."
+            # Collapse into: name on first, role on last
+            name_parts = name.split() if name else ["Candidate"]
+            if len(paras) >= 3:
+                _safe_write(paras[0], name_parts[0] if name_parts else name)
+                _safe_write(paras[1], " ".join(name_parts[1:]) if len(name_parts) > 1 else "")
+                _safe_write(paras[2], f"– {role}" if role else "")
+            elif len(paras) == 2:
+                _safe_write(paras[0], name)
+                _safe_write(paras[1], f"– {role}" if role else "")
+            elif paras:
+                _safe_write(paras[0], f"{name} – {role}" if role else name)
 
-        # Three "object 3" boxes — tell apart by position 
+        # Main content area (summary + skills content)
         elif sname == "object 3":
-            top  = shape.top   # EMU
-            left = shape.left  # EMU
+            paras = shape.text_frame.paragraphs
+            if not paras:
+                continue
+            # Write summary into the first paragraph
+            _safe_write(paras[0], summary, missing=not summary)
+            # Leave remaining paragraphs (skills) as-is from template
+            # since they already show skill categories from Prasad's template
 
-            if top < _1_IN:
-                # Summary box (top ≈ 0.47 in) — 4 paragraph slots
-                paras = tf.paragraphs
-                for i, para in enumerate(paras):
-                    _set_para(para, sentences[i] if i < len(sentences) else "")
-
-            elif left > _5_IN:
-                # Education box (left ≈ 8.33 in) — 1 paragraph
-                _set_para(tf.paragraphs[0], education)
-
-            else:
-                # Skills box (left ≈ 0.27 in) — 15 paragraph slots
-                paras = tf.paragraphs
-                for i, para in enumerate(paras):
-                    _set_para(para, skill_lines[i] if i < len(skill_lines) else "")
-
-        # TextBox 16 ("Education" label) — leave untouched
+        # Education textbox
+        elif "TextBox 16" in sname or sname.lower() == "textbox 16":
+            paras = shape.text_frame.paragraphs
+            if len(paras) >= 2:
+                _safe_write(paras[0], "Education")
+                _safe_write(paras[1], edu, missing=not edu)
+            elif paras:
+                _safe_write(paras[0], edu, missing=not edu)
 
 
-# Project slides (slides 2–5) 
+# Slides 2–5: Project slides
 
-def _fill_project_slide(slide, proj_num: int, d: dict) -> None:
-    pname    = (d.get(f"PROJECT{proj_num}_NAME") or "").strip()
-    duration = (d.get(f"DURATION_PROJECT{proj_num}") or "").strip()
-    role     = (d.get(f"ROLE_PROJECT{proj_num}") or "").strip()
-    desc     = (d.get(f"Project{proj_num}_Description") or "").strip()
-    resp_raw = d.get(f"Responsibilities_Project{proj_num}") or ""
-
-    # Bullet lines — accept list or newline-separated string
-    if isinstance(resp_raw, list):
-        bullet_lines = [str(b).strip() for b in resp_raw if str(b).strip()]
-    else:
-        bullet_lines = [
-            line.strip().lstrip("•- ")
-            for line in str(resp_raw).splitlines()
-            if line.strip()
-        ]
-
-    # Cap at 4 bullets to fit within the designed text box height
-    bullet_lines = bullet_lines[:4]
+def _populate_project_slide(slide, proj_num, d):
+    pname    = d.get(f"PROJECT{proj_num}_NAME")              or ""
+    duration = d.get(f"DURATION_PROJECT{proj_num}")          or ""
+    role     = d.get(f"ROLE_PROJECT{proj_num}")              or ""
+    desc     = d.get(f"Project{proj_num}_Description")       or ""
+    bullets  = d.get(f"project{proj_num}_bullets")           or []
 
     for shape in slide.shapes:
         if not shape.has_text_frame:
             continue
-
         sname = shape.name
-        tf    = shape.text_frame
 
-        # TextBox 6: Project name / Duration / Role 
-        if sname == "TextBox 6":
-            paras = tf.paragraphs
+        # "Project N" label
+        if sname == "TextBox 13":
+            paras = shape.text_frame.paragraphs
+            # Template splits "Project" and "1" across two paragraphs
+            if len(paras) >= 2:
+                _safe_write(paras[0], "Project")
+                _safe_write(paras[1], str(proj_num))
+            elif paras:
+                _safe_write(paras[0], f"Project {proj_num}")
 
-            # p[0]: "Project: {name}"
-            if paras:
-                p0_runs = paras[0].runs
-                if len(p0_runs) >= 2:
-                    p0_runs[0].text = "Project: "
-                    p0_runs[-1].text = pname
-                    for run in p0_runs[1:-1]:
-                        run.text = ""
-                elif len(p0_runs) == 1:
-                    p0_runs[0].text = f"Project: {pname}"
+        # Meta row: Project / Duration / Role
+        elif sname == "TextBox 6":
+            paras = shape.text_frame.paragraphs
+            # Template layout (6 paras): label, value, label, value, label, value
+            meta_values = [
+                ("Project:",    pname    or "–"),
+                ("Duration :", duration or "–"),
+                ("Role",       f": {role}" if role else ": –"),
+            ]
+            pair_idx = 0
+            for i, para in enumerate(paras):
+                if pair_idx < len(meta_values):
+                    label, value = meta_values[pair_idx]
+                    if i % 2 == 0:
+                        _safe_write(para, label)
+                    else:
+                        _safe_write(para, value, missing=not value.strip("– :"))
+                        pair_idx += 1
 
-            # p[1]: "Duration : {value}"
-            if len(paras) > 1:
-                p1_runs = paras[1].runs
-                if len(p1_runs) >= 2:
-                    p1_runs[0].text = "Duration : "
-                    p1_runs[1].text = duration
-                elif len(p1_runs) == 1:
-                    p1_runs[0].text = f"Duration : {duration}"
+        # Description label
+        elif sname == "TextBox 11":
+            # Leave "Description:" label text as-is
+            pass
 
-            # p[2]: "Role" (bold run[0]) + ": {value}" (normal run[1])
-            if len(paras) > 2:
-                p2_runs = paras[2].runs
-                if len(p2_runs) >= 2:
-                    p2_runs[0].text = "Role"
-                    p2_runs[1].text = f": {role}"
-                elif len(p2_runs) == 1:
-                    p2_runs[0].text = f"Role: {role}"
-
-        # TextBox 10: Description + Responsibilities 
+        # Description body + Responsibilities
         elif sname == "TextBox 10":
-            paras = tf.paragraphs
+            paras = shape.text_frame.paragraphs
+            if not paras:
+                continue
 
-            # p[0] → description
-            if paras:
-                _set_para(paras[0], desc)
+            # Find "Responsibilities" paragraph index
+            resp_idx = None
+            for i, p in enumerate(paras):
+                full_text = "".join(r.text for r in p.runs).lower()
+                if "responsibilit" in full_text:
+                    resp_idx = i
+                    break
 
-            # p[1] → blank separator
-            if len(paras) > 1:
-                _set_para(paras[1], "")
+            # Write description into first paragraph
+            _safe_write(paras[0], desc, missing=not desc)
 
-            # p[2] → "Responsibilities: " label
-            if len(paras) > 2:
-                _set_para(paras[2], "Responsibilities: ")
+            # Write bullets after Responsibilities label
+            if resp_idx is not None:
+                bullet_start = resp_idx + 1
+                for i in range(bullet_start, len(paras)):
+                    bi = i - bullet_start
+                    if bi < len(bullets):
+                        _safe_write(paras[i], bullets[bi])
+                    else:
+                        _safe_write(paras[i], "")
+            elif bullets:
+                # No explicit label — write bullets from para 1 onward
+                for i, para in enumerate(paras[1:], 1):
+                    bi = i - 1
+                    if bi < len(bullets):
+                        _safe_write(para, bullets[bi])
+                    else:
+                        # OVERLAP FIX 
+                        _safe_write(para, "")
 
-            # p[3]–p[6] → new candidate's bullet lines (max 4), blank unused slots
-            for i in range(3, min(7, len(paras))):
-                bi = i - 3
-                _set_para(paras[i], bullet_lines[bi] if bi < len(bullet_lines) else "")
 
-            for i in range(7, len(paras)):
-                _set_para(paras[i], "")
-
-        # TextBox 11 ("Description:" label) and TextBox 13 ("Project N") — leave untouched
-
-
-# Public API 
+# Main
 
 def generate_candidate_ppt(candidate_data: dict) -> bytes | None:
-    """
-    Fill the NexTurn PPT template with candidate_data and return raw bytes.
-    Returns None on error (error is also surfaced via st.error).
-    """
     try:
         if not os.path.exists(TEMPLATE_PATH):
             st.error(
                 f"PPT template not found. "
-                f"Expected: {TEMPLATE_PATH}\n"
-                f"Make sure 'sample_ppt_template.pptx' is in your templates/ folder."
+                f"Please place `sample_ppt_template.pptx` in the `templates/` folder "
+                f"next to app.py. Expected path: {TEMPLATE_PATH}"
             )
             return None
 
         prs = Presentation(TEMPLATE_PATH)
         d   = map_to_template_format(candidate_data)
 
-        # Slide 1 — profile
-        if prs.slides:
-            _fill_slide1(prs.slides[0], d)
+        if len(prs.slides) >= 1:
+            _populate_slide1(prs.slides[0], d)
 
-        # Slides 2–5 — projects
         for i in range(1, min(5, len(prs.slides))):
-            _fill_project_slide(prs.slides[i], i, d)
+            _populate_project_slide(prs.slides[i], i, d)
 
         buf = io.BytesIO()
         prs.save(buf)
         buf.seek(0)
         return buf.read()
 
-    except Exception as exc:
-        st.error(f"PPT Generation Error: {exc}")
-        import traceback
-        st.error(traceback.format_exc())
+    except Exception as e:
+        st.error(f"PPT Generation Error: {e}")
         return None

@@ -31,22 +31,17 @@ from backend.openai_client import create_openai_completion
 # Contact validation helpers 
 
 def _is_valid_email(email: str) -> bool:
-    if not email or not email.strip():
+    if not email or not str(email).strip():
         return False
-    return bool(re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email.strip()))
+    return bool(re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
+                         str(email).strip()))
 
 
 def _is_valid_phone(phone: str) -> bool:
-    if not phone or not phone.strip():
+    if not phone or not str(phone).strip():
         return False
-    digits = re.sub(r'\D', '', phone.strip())
+    digits = re.sub(r'\D', '', str(phone).strip())
     return len(digits) in (10, 11, 12)
-
-
-def _display_contact(value: str, validator_fn):
-    if validator_fn(value):
-        return value.strip(), True
-    return "Not Available", False
 
 
 # Entry point 
@@ -62,7 +57,7 @@ def render_analysis_tab(parsed_resumes, client):
         </p>
         <ul style="color:#2C3E50;margin:0;padding-left:18px;font-size:0.95rem;line-height:1.85;">
             <li>Paste or upload the <strong>Job Description</strong> below</li>
-            <li>Click <strong>Run AI Screening</strong> — AI scores every resume against the JD</li>
+            <li>Click <strong>Run AI Screening</strong> — AI scores every resume against the job description</li>
             <li>Results appear ranked by score, <strong>highest first</strong></li>
             <li>☑️ Select candidates at your discretion for <strong>interview consideration</strong></li>
             <li>📋 AI generates a <strong>NexTurn-compatible</strong> structured profile per candidate</li>
@@ -70,7 +65,7 @@ def render_analysis_tab(parsed_resumes, client):
     </div>
     """, unsafe_allow_html=True)
 
-    # Job Description Input 
+    # Job Description Input
     st.subheader("📄 Step 1 — Enter the Job Details")
     sp_connected = st.session_state.get("sharepoint_config", {}).get("connected", False)
 
@@ -118,7 +113,7 @@ def render_analysis_tab(parsed_resumes, client):
 
     st.divider()
 
-    # Launch button 
+    # Launch button
     st.subheader("Step 2 — Run AI Screening")
     col_btn, col_info = st.columns([1, 2])
     with col_btn:
@@ -144,8 +139,10 @@ def render_analysis_tab(parsed_resumes, client):
 
 def _render_sharepoint_jd_panel():
     sp = st.session_state.get("sharepoint_config", {})
+
     with st.spinner("Loading JDs from SharePoint…"):
         all_jds = list_jds_from_sharepoint(sp)
+
     if not all_jds:
         st.info("No job descriptions found in SharePoint yet.")
         return
@@ -157,8 +154,10 @@ def _render_sharepoint_jd_panel():
     st.markdown("**📂 My JDs** *(uploaded or last modified by you)*")
     if my_jds:
         my_display = [j.get("display_name", j["name"]) for j in my_jds]
-        sel = st.selectbox("Select one of your JDs to load",
-                           ["— select —"] + my_display, key="sp_my_jd_select")
+        sel = st.selectbox(
+            "Select one of your JDs to load",
+            ["— select —"] + my_display, key="sp_my_jd_select",
+        )
         if sel != "— select —":
             jd_obj = next(j for j in my_jds if j.get("display_name", j["name"]) == sel)
             if st.button("📥 Load this JD", key="load_my_jd"):
@@ -181,8 +180,10 @@ def _render_sharepoint_jd_panel():
             f"{j.get('display_name', j['name'])}  ·  {j.get('owner_name', '')}"
             for j in other_jds
         ]
-        sel_o = st.selectbox("Select a JD to load",
-                             ["— select —"] + other_display, key="sp_other_jd_select")
+        sel_o = st.selectbox(
+            "Select a JD to load",
+            ["— select —"] + other_display, key="sp_other_jd_select",
+        )
         if sel_o != "— select —":
             jd_obj = other_jds[other_display.index(sel_o)]
             col_load, col_del = st.columns([1, 1])
@@ -238,8 +239,8 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
         if k.startswith(("docx_bytes_", "pptx_bytes_", "detailed_", "doc_check_")):
             del st.session_state[k]
 
-    analyzer   = ResumeAnalyzer(client)
-    res_list   = parsed_resumes if isinstance(parsed_resumes, list) else [parsed_resumes]
+    analyzer = ResumeAnalyzer(client)
+    res_list = parsed_resumes if isinstance(parsed_resumes, list) else [parsed_resumes]
     progress   = st.progress(0)
     status_box = st.empty()
     raw_results = []
@@ -247,7 +248,7 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
     for idx, res_data in enumerate(res_list):
         name = res_data.get("name", f"Candidate {idx + 1}")
         status_box.markdown(
-            f"<p style='color:#555;'>🔍 AI screening "
+            f"<p style='color:#555;'> AI screening "
             f"<strong>{name}</strong> ({idx+1}/{len(res_list)})…</p>",
             unsafe_allow_html=True,
         )
@@ -329,87 +330,68 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
 # Results renderer 
 
 def _render_results(client):
-    results   = st.session_state.review_results
-    committed = st.session_state.selected_for_pool 
-    total     = len(results)
+    results  = st.session_state.review_results
+    selected = st.session_state.selected_for_pool
 
     if "pending_pool" not in st.session_state:
-        st.session_state.pending_pool = set(committed)
+        st.session_state.pending_pool = set(selected)
+
+    pending = st.session_state.pending_pool
+    total   = len(results)
 
     st.divider()
-
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Candidates", total)
-    c2.metric("Added to Pool",    len(committed))
-    c3.metric("Still to Review",  total - len(committed))
+    c1.metric("Total Candidates",  total)
+    c2.metric("Selected for Pool", len(selected))   # shows COMMITTED count only
+    c3.metric("Still to Review",   total - len(selected))
 
-    # Bulk-action toolbar 
     col_sel, col_desel, col_move, _ = st.columns([1, 1, 1.6, 1.4])
-
     with col_sel:
         if st.button("✅ Select All", use_container_width=True):
-            all_names = {
-                r["metadata"].get("name", f"Candidate_{i}")
-                for i, r in enumerate(results)
+            st.session_state.pending_pool = {
+                r["metadata"].get("name", f"Candidate_{i}") for i, r in enumerate(results)
             }
-            st.session_state.pending_pool = all_names
-            # Force checkbox widgets to reflect the new state
             for i in range(len(results)):
                 st.session_state[f"chk_{i}"] = True
             st.rerun()
-
     with col_desel:
         if st.button("☐ Clear All", use_container_width=True):
             st.session_state.pending_pool = set()
             for i in range(len(results)):
                 st.session_state[f"chk_{i}"] = False
             st.rerun()
-
     with col_move:
-        pending      = st.session_state.pending_pool
-        n_pending    = len(pending)
         move_clicked = st.button(
-            f"Move to Candidate Pool ({n_pending})",
-            type="primary",
-            use_container_width=True,
-            disabled=(n_pending == 0),
+            f"Move to Candidate Pool ({len(pending)})",
+            type="primary", use_container_width=True, disabled=(len(pending) == 0),
         )
         if move_clicked:
+            # Commit in the SAME click — metrics update on the rerun that follows
             st.session_state.selected_for_pool = set(pending)
-            st.toast(f"✅ {n_pending} candidate(s) moved to pool!", icon="🎉")
+            st.toast(f"✅ {len(pending)} candidate(s) moved to pool!", icon="🎉")
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader(f"📋 All {total} Candidates — ranked by AI score")
 
-    # Candidate cards 
     for idx, item in enumerate(results):
         meta        = item["metadata"]
         analysis    = item["analysis"]
         final_score = item.get("final_score", 0)
         name        = meta.get("name", f"Candidate_{idx+1}")
+        in_pending  = name in pending
+        in_pool     = name in selected
 
-        in_pool    = name in committed
-        in_pending = name in st.session_state.pending_pool
-
-        if in_pool:
-            tag = "☑ Added to Pool"
-        elif in_pending:
-            tag = "🔲 Selected (pending)"
-        else:
-            tag = "☐ Not Selected"
-
+        tag = "☑ Added to Pool" if in_pool else ("🔲 Selected" if in_pending else "☐ Not Selected")
         expander_title = f"#{idx+1}  {name}  |  🎯 {final_score}% match  |  {tag}"
 
+        # No on_change callback — pending_pool updated inline, no rerun on tick
         col_chk, col_card = st.columns([0.01, 0.99])
-
         with col_chk:
             checked = st.checkbox(
-                f"Select {name}",
-                value=in_pending,
-                key=f"chk_{idx}",
-                label_visibility="collapsed",
+                f"Select {name}", value=in_pending, key=f"chk_{idx}",
                 help="Tick to select — click 'Move to Candidate Pool' when done",
+                label_visibility="collapsed",
             )
             if checked:
                 st.session_state.pending_pool.add(name)
@@ -419,29 +401,24 @@ def _render_results(client):
         with col_card:
             with st.expander(expander_title, expanded=(idx == 0 and not in_pending)):
                 st.markdown("<br>", unsafe_allow_html=True)
-                _render_score_section(
-                    meta, final_score,
-                    item.get("breakdown", {}),
-                    item.get("reason", ""),
-                )
+                _render_score_section(meta, final_score, item.get("breakdown", {}), item.get("reason", ""))
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_quality_section(analysis, meta)
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_doc_buttons(client, name, meta, idx)
 
-    # Bottom hint 
-    pending = st.session_state.pending_pool
     if pending:
         st.divider()
-        pending_only = len(pending - committed)
+        pending_only = len(pending - selected)
+        committed    = len(selected)
         if pending_only > 0:
             st.info(
-                f"**{pending_only}** candidate(s) ticked but not yet confirmed. "
-                "Click **Move to Candidate Pool** above to add them."
+                f"**{pending_only}** candidate(s) selected but not yet moved to pool. "
+                "Click **Move to Candidate Pool** above to confirm."
             )
-        if committed:
+        if committed > 0:
             st.success(
-                f"**{len(committed)}** candidate(s) in pool. "
+                f"**{committed}** candidate(s) already in pool. "
                 "Go to the **Candidate Pool** tab to view the shortlist."
             )
 
@@ -457,17 +434,19 @@ def _render_score_section(meta, final_score, breakdown=None, reason=""):
     else:
         bg, border, fg = "#FFFDE7", "#FFE082", "#E65100"
 
+    # Validate email and phone — show red "Not Available" if invalid
     raw_email = meta.get("email", "")
     raw_phone = meta.get("phone", "")
-    email_display, email_valid = _display_contact(raw_email, _is_valid_email)
-    phone_display, phone_valid = _display_contact(raw_phone, _is_valid_phone)
+    email_ok  = _is_valid_email(raw_email)
+    phone_ok  = _is_valid_phone(raw_phone)
 
     col_details, col_score = st.columns([2, 1])
     with col_details:
-        if email_valid:
+        # Email
+        if email_ok:
             st.markdown(
                 f"<p style='font-size:1.05rem;margin:6px 0;'>"
-                f"<strong>📧 Email:</strong> {email_display}</p>",
+                f"<strong>📧 Email:</strong> {raw_email}</p>",
                 unsafe_allow_html=True,
             )
         else:
@@ -478,10 +457,11 @@ def _render_score_section(meta, final_score, breakdown=None, reason=""):
                 unsafe_allow_html=True,
             )
 
-        if phone_valid:
+        # Phone
+        if phone_ok:
             st.markdown(
                 f"<p style='font-size:1.05rem;margin:6px 0;'>"
-                f"<strong>📱 Phone:</strong> {phone_display}</p>",
+                f"<strong>📱 Phone:</strong> {raw_phone}</p>",
                 unsafe_allow_html=True,
             )
         else:
@@ -598,9 +578,7 @@ def _render_quality_section(analysis, meta=None):
                 unsafe_allow_html=True,
             )
         else:
-            li = "".join(
-                f"<li style='margin-bottom:5px;line-height:1.5;'>{p}</li>" for p in atomic
-            )
+            li = "".join(f"<li style='margin-bottom:5px;line-height:1.5;'>{p}</li>" for p in atomic)
             st.markdown(
                 f"<div style='background:#FFFDE7;border:1px solid #FDD835;border-radius:8px;"
                 f"padding:10px 14px;margin-bottom:8px;'>"
@@ -609,7 +587,6 @@ def _render_quality_section(analysis, meta=None):
                 unsafe_allow_html=True,
             )
 
-    # Contact info check
     if meta is not None:
         email_ok = _is_valid_email(meta.get("email", ""))
         phone_ok = _is_valid_phone(meta.get("phone", ""))
@@ -619,37 +596,36 @@ def _render_quality_section(analysis, meta=None):
                 [
                     "Email address not found or invalid",
                     "Phone number not found or invalid (expected 10 digits local, "
-                    "or 11–12 with country code)",
+                    "or 11–12 digits with country code)",
                 ],
             )
         elif not email_ok:
-            yellow_bullets("Missing contact information",
-                           ["Email address not found or invalid"])
+            yellow_bullets(
+                "Missing contact information",
+                ["Email address not found or invalid"],
+            )
         elif not phone_ok:
             yellow_bullets(
                 "Missing contact information",
                 [
                     "Phone number not found or invalid (expected 10 digits local, "
-                    "or 11–12 with country code)"
+                    "or 11–12 digits with country code)"
                 ],
             )
         else:
             green_box("Contact information", "Email and phone number both present and valid")
 
     gaps = analysis.get("career_gaps", [])
-    (yellow_bullets("Gaps in work history", gaps) if gaps
-     else green_box("Work history", "No major gaps found"))
+    yellow_bullets("Gaps in work history", gaps) if gaps else green_box("Work history", "No major gaps found")
 
     tech = analysis.get("technical_anomalies", [])
-    (yellow_bullets("Things to double-check", tech) if tech
-     else green_box("Experience details", "Everything looks consistent"))
+    yellow_bullets("Things to double-check", tech) if tech else green_box("Experience details", "Everything looks consistent")
 
     concerns = analysis.get("fake_indicators", [])
     if concerns:
         yellow_bullets("Points that need a closer look", concerns)
 
 
-# Doc buttons 
 
 def _render_doc_buttons(client, name, meta, idx):
     st.markdown("#### 📋 NexTurn Profile Export")
@@ -687,13 +663,13 @@ def _render_doc_buttons(client, name, meta, idx):
         for w in check["warnings"]:
             wl = w.lower()
             icon = (
-                "👤" if "name"       in wl else
+                "👤" if "name" in wl else
                 "💼" if "experience" in wl or "work" in wl else
-                "🚀" if "project"    in wl else
-                "💻" if "skill"      in wl else
-                "🎓" if "education"  in wl else
-                "📝" if "summary"    in wl else
-                "🏢" if "company"    in wl else "ℹ️"
+                "🚀" if "project" in wl else
+                "💻" if "skill" in wl else
+                "🎓" if "education" in wl else
+                "📝" if "summary" in wl else
+                "🏢" if "company" in wl else "ℹ️"
             )
             st.markdown(
                 f"<div style='background:#FFF8E1;border-left:3px solid #F59E0B;"

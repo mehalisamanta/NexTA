@@ -19,13 +19,13 @@ def _sp_connected():
     return _sp_config().get('connected', False)
 
 
-# Contact validation
+# Contact validation 
 
 def _is_valid_email(email: str) -> bool:
     if not email or not str(email).strip():
         return False
-    pattern = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, str(email).strip()))
+    return bool(re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
+                         str(email).strip()))
 
 
 def _is_valid_phone(phone: str) -> bool:
@@ -35,7 +35,7 @@ def _is_valid_phone(phone: str) -> bool:
     return len(digits) in (10, 11, 12)
 
 
-# Main tab renderer 
+# Main tab 
 
 def render_candidate_pool_tab():
     st.header("👥 Candidate Pool")
@@ -83,23 +83,22 @@ def render_candidate_pool_tab():
         for r in review_results
     }
 
-    # Build rows with validated contact info 
     rows = []
     for r in selected_resumes:
         name      = r.get('name', '')
         raw_email = r.get('email', '')
         raw_phone = r.get('phone', '')
 
-        email_val = raw_email if _is_valid_email(raw_email) else None
-        phone_val = raw_phone if _is_valid_phone(raw_phone) else None
+        email_val = raw_email if _is_valid_email(raw_email) else 'None'
+        phone_val = raw_phone if _is_valid_phone(raw_phone) else 'None'
 
         rows.append({
             'Candidate Name':   name,
             'AI Match Score':   f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
             'Current Role':     r.get('current_role', ''),
             'Experience (yrs)': r.get('experience_years', ''),
-            'Email':            email_val if email_val else 'None',
-            'Phone':            phone_val if phone_val else 'None',
+            'Email':            email_val,
+            'Phone':            phone_val,
             'Key Skills':       str(r.get('tech_stack', ''))[:80],
             'Education':        r.get('education', ''),
         })
@@ -116,20 +115,18 @@ def render_candidate_pool_tab():
 
     st.subheader("📊 Pool Overview")
 
-    # Render table with red styling for None values 
+    # Colour 'None' cells red using pandas Styler
     def _style_none_red(val):
         if val == 'None':
             return 'color: #DC2626; font-weight: 600;'
         return ''
 
-    styled_df = pool_df.style.applymap(
-        _style_none_red, subset=['Email', 'Phone']
-    )
+    styled_df = pool_df.style.applymap(_style_none_red, subset=['Email', 'Phone'])
     st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # Export 
     st.markdown("#### 💾 Export Pool Data")
 
+    # For CSV export replace 'None' with empty string
     export_df = pool_df.copy()
     export_df['Email'] = export_df['Email'].replace('None', '')
     export_df['Phone'] = export_df['Phone'].replace('None', '')
