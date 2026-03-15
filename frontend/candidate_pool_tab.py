@@ -1,8 +1,9 @@
 """
-Candidate Pool Tab 
+Candidate Pool Tab
 
 """
 
+import re
 import io
 from datetime import datetime
 import streamlit as st
@@ -18,12 +19,29 @@ def _sp_connected():
     return _sp_config().get('connected', False)
 
 
+# Contact validation
+
+def _is_valid_email(email: str) -> bool:
+    if not email or not str(email).strip():
+        return False
+    pattern = r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, str(email).strip()))
+
+
+def _is_valid_phone(phone: str) -> bool:
+    if not phone or not str(phone).strip():
+        return False
+    digits = re.sub(r'\D', '', str(phone).strip())
+    return len(digits) in (10, 11, 12)
+
+
+# Main tab renderer 
+
 def render_candidate_pool_tab():
     st.header("👥 Candidate Pool")
 
     selected_names = st.session_state.get('selected_for_pool', set())
 
-    # Empty state 
     if not selected_names:
         st.markdown("""
         <div style="background:#F0F7FF; padding:24px; border-radius:10px;
@@ -48,7 +66,6 @@ def render_candidate_pool_tab():
         st.warning("Resume data not found for selected candidates. Please go back and re-select.")
         return
 
-    # Summary banner 
     st.markdown(f"""
     <div style="background:#F0FFF4; padding:16px 20px; border-radius:10px;
                 border-left:5px solid #81C784; margin-bottom:24px;">
@@ -61,43 +78,64 @@ def render_candidate_pool_tab():
     </div>
     """, unsafe_allow_html=True)
 
-    # Build display table with scores 
     score_map = {
         r['metadata'].get('name'): r.get('final_score', '—')
         for r in review_results
     }
 
+    # Build rows with validated contact info 
     rows = []
     for r in selected_resumes:
-        name = r.get('name', '')
+        name      = r.get('name', '')
+        raw_email = r.get('email', '')
+        raw_phone = r.get('phone', '')
+
+        email_val = raw_email if _is_valid_email(raw_email) else None
+        phone_val = raw_phone if _is_valid_phone(raw_phone) else None
+
         rows.append({
-            'Candidate Name':  name,
-            'AI Match Score':  f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
-            'Current Role':    r.get('current_role', ''),
+            'Candidate Name':   name,
+            'AI Match Score':   f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
+            'Current Role':     r.get('current_role', ''),
             'Experience (yrs)': r.get('experience_years', ''),
-            'Email':           r.get('email', ''),
-            'Phone':           r.get('phone', ''),
-            'Key Skills':      str(r.get('tech_stack', ''))[:80],
-            'Education':       r.get('education', ''),
+            'Email':            email_val if email_val else 'None',
+            'Phone':            phone_val if phone_val else 'None',
+            'Key Skills':       str(r.get('tech_stack', ''))[:80],
+            'Education':        r.get('education', ''),
         })
 
-    # Sort by score descending
     def _score_val(row):
         s = str(row.get('AI Match Score', '0')).replace('%', '').strip()
-        try: return float(s)
-        except: return 0
+        try:
+            return float(s)
+        except Exception:
+            return 0
 
     rows.sort(key=_score_val, reverse=True)
     pool_df = pd.DataFrame(rows)
 
     st.subheader("📊 Pool Overview")
-    st.dataframe(pool_df, use_container_width=True, hide_index=True)
 
-    # Download & SharePoint 
+    # Render table with red styling for None values 
+    def _style_none_red(val):
+        if val == 'None':
+            return 'color: #DC2626; font-weight: 600;'
+        return ''
+
+    styled_df = pool_df.style.applymap(
+        _style_none_red, subset=['Email', 'Phone']
+    )
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+    # Export 
     st.markdown("#### 💾 Export Pool Data")
 
+    export_df = pool_df.copy()
+    export_df['Email'] = export_df['Email'].replace('None', '')
+    export_df['Phone'] = export_df['Phone'].replace('None', '')
+
     csv_buf = io.StringIO()
-    pool_df.to_csv(csv_buf, index=False)
+    export_df.to_csv(csv_buf, index=False)
     csv_bytes = csv_buf.getvalue()
 
     col_csv, col_sp, _ = st.columns([1, 1, 1])
