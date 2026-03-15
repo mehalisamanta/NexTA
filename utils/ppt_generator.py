@@ -1,5 +1,7 @@
 """
-PPT Generator
+PPT Generator — uses the NexTurn sample_ppt_template.pptx as a base.
+Clears each slide content and rewrites with candidate data,
+preserving original layout, fonts and positioning.
 
 """
 
@@ -25,7 +27,7 @@ RED   = RGBColor(0xFF, 0x00, 0x00)
 BLACK = RGBColor(0x00, 0x00, 0x00)
 
 
-# Helpers
+# Helpers 
 
 def _set_run_text(run, text, missing=False):
     """Set run text; mark red+bold if missing."""
@@ -44,7 +46,7 @@ def _safe_write(para, text, missing=False):
             r._r.getparent().remove(r._r)
 
 
-# Slide 1: Profile
+# Slide 1: Profile 
 
 def _populate_slide1(slide, d):
     name    = d.get("FULL_NAME")            or ""
@@ -60,7 +62,7 @@ def _populate_slide1(slide, d):
             continue
         sname = shape.name
 
-        # Name/role header (Google Shape with candidate name)
+        # Name/role header (Google Shape with candidate name) 
         if "Google Shape" in sname or "g86061" in sname:
             paras = shape.text_frame.paragraphs
             # Template has 3 paragraphs: "Prasad", "Chittiboina", "– Senior..."
@@ -76,7 +78,7 @@ def _populate_slide1(slide, d):
             elif paras:
                 _safe_write(paras[0], f"{name} – {role}" if role else name)
 
-        # Main content area (summary + skills content)
+        # Main content area (summary + skills content) 
         elif sname == "object 3":
             paras = shape.text_frame.paragraphs
             if not paras:
@@ -86,7 +88,7 @@ def _populate_slide1(slide, d):
             # Leave remaining paragraphs (skills) as-is from template
             # since they already show skill categories from Prasad's template
 
-        # Education textbox
+        # Education textbox 
         elif "TextBox 16" in sname or sname.lower() == "textbox 16":
             paras = shape.text_frame.paragraphs
             if len(paras) >= 2:
@@ -96,7 +98,7 @@ def _populate_slide1(slide, d):
                 _safe_write(paras[0], edu, missing=not edu)
 
 
-# Slides 2–5: Project slides
+# Slides 2–5: Project slides 
 
 def _populate_project_slide(slide, proj_num, d):
     pname    = d.get(f"PROJECT{proj_num}_NAME")              or ""
@@ -110,7 +112,7 @@ def _populate_project_slide(slide, proj_num, d):
             continue
         sname = shape.name
 
-        # "Project N" label
+        # "Project N" label 
         if sname == "TextBox 13":
             paras = shape.text_frame.paragraphs
             # Template splits "Project" and "1" across two paragraphs
@@ -120,7 +122,7 @@ def _populate_project_slide(slide, proj_num, d):
             elif paras:
                 _safe_write(paras[0], f"Project {proj_num}")
 
-        # Meta row: Project / Duration / Role
+        # Meta row: Project / Duration / Role 
         elif sname == "TextBox 6":
             paras = shape.text_frame.paragraphs
             # Template layout (6 paras): label, value, label, value, label, value
@@ -139,12 +141,13 @@ def _populate_project_slide(slide, proj_num, d):
                         _safe_write(para, value, missing=not value.strip("– :"))
                         pair_idx += 1
 
-        # Description label
+        # Description label 
         elif sname == "TextBox 11":
             # Leave "Description:" label text as-is
+
             pass
 
-        # Description body + Responsibilities
+        # Description body + Responsibilities 
         elif sname == "TextBox 10":
             paras = shape.text_frame.paragraphs
             if not paras:
@@ -177,11 +180,10 @@ def _populate_project_slide(slide, proj_num, d):
                     if bi < len(bullets):
                         _safe_write(para, bullets[bi])
                     else:
-                        # OVERLAP FIX 
                         _safe_write(para, "")
 
 
-# Main
+# Main 
 
 def generate_candidate_ppt(candidate_data: dict) -> bytes | None:
     try:

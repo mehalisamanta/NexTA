@@ -10,8 +10,10 @@ import streamlit as st
 from datetime import datetime, timedelta
 from PIL import Image
 
-# Make project root importable
+# ── Make project root importable (Windows-safe) ───────────────────────────────
+# Strategy 1: parent of this file's directory
 _by_file = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Strategy 2: current working directory (where `streamlit run` was called from)
 _by_cwd = os.getcwd()
 for _root in (_by_file, _by_cwd):
     if _root not in sys.path:
@@ -30,7 +32,7 @@ from frontend.tabs import render_upload_tab, render_analytics_tab
 from frontend.analysis_tab import render_analysis_tab
 from frontend.candidate_pool_tab import render_candidate_pool_tab
 
-# Page config (must be first Streamlit call)
+# Page config (must be first Streamlit call) ───────────────────────────────
 st.set_page_config(**PAGE_CONFIG)
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 st.markdown("""
@@ -45,7 +47,7 @@ div[data-testid="stExpander"] summary span {
 """, unsafe_allow_html=True)
 
 
-# Session state defaults
+# Session state defaults 
 _defaults = {
     "parsed_resumes":    [],
     "candidates_df":     None,
@@ -72,7 +74,10 @@ for key, val in _defaults.items():
         st.session_state[key] = val
 
 
+# Internal helpers 
+
 def _init_openai():
+    """Init OpenAI client once per session."""
     if st.session_state.get("client") is None:
         try:
             st.session_state["client"] = init_openai_client()
@@ -82,6 +87,11 @@ def _init_openai():
 
 
 def _init_sharepoint():
+    """
+    Establish app-only SharePoint connection using the service account credentials
+    (TENANT_ID / CLIENT_ID / CLIENT_SECRET).  This is separate from the user's
+    SSO login — the app uses a dedicated service principal for file operations.
+    """
     sp = st.session_state.sharepoint_config
     if sp.get("connected"):
         return
@@ -106,14 +116,22 @@ def _init_sharepoint():
         pass
 
 
+# Main 
+
 def main():
+    # SSO gate 
+    # render_sso_login() handles the entire OAuth 2.0 flow:
+    #   • Not logged in       → shows "Sign in with Microsoft" button → returns False
+    #   • ?code= present      → exchanges for token, stores name/email → reruns
+    #   • Already logged in   → returns True immediately
     if not render_sso_login():
         return
 
+    # One-time init 
     _init_openai()
     _init_sharepoint()
 
-    # Header
+    # Header 
     st.markdown('<div class="nexturn-header">', unsafe_allow_html=True)
     try:
         col1, col2, col3 = st.columns([1, 1.3, 1])
@@ -135,11 +153,12 @@ def main():
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Sidebar
+    # Sidebar 
     with st.sidebar:
         render_user_badge()
         st.title("⚙️ Settings")
 
+        # Privacy notice — PII masking is always on, not configurable
         st.subheader("🛡️ Privacy")
         st.markdown(
             "<div style='background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;"
@@ -149,12 +168,13 @@ def main():
             "redacted before AI processing.</span></div>",
             unsafe_allow_html=True,
         )
-        mask_pii_enabled = True
+        mask_pii_enabled = True  # always enforced
 
         st.divider()
 
-        sp_connected    = st.session_state.sharepoint_config.get("connected", False)
-        sp_tab_selected = (
+        # SharePoint date filter — only active when SP tab is selected
+        sp_connected     = st.session_state.sharepoint_config.get("connected", False)
+        sp_tab_selected  = (
             st.session_state.get("upload_method_radio", "")
             == "☁️ Retrieve from SharePoint"
         )
@@ -202,7 +222,6 @@ def main():
                     )
                 with c2:
                     end_date = st.date_input("To", value=today, key="date_to")
-
                 if start_date and end_date:
                     if start_date > end_date:
                         st.error("⚠️ 'From' date cannot be after 'To' date.")
@@ -218,7 +237,7 @@ def main():
     st.session_state["start_date"]       = start_date
     st.session_state["end_date"]         = end_date
 
-    # Tabs
+    # Tabs 
     tab1, tab2, tab3, tab4 = st.tabs([
         "📤 Upload/Retrieve Resumes",
         "🎯 Candidate Review & Scoring",
@@ -245,7 +264,7 @@ def main():
     with tab4:
         render_analytics_tab()
 
-    # Footer
+    # Footer 
     st.divider()
     st.markdown(
         '<div style="text-align:center;color:#666;padding:20px;">'

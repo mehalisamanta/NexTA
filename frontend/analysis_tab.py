@@ -1,10 +1,9 @@
 """
-analysis_tab.py
+ui/analysis_tab.py
 Candidate Review & Scoring Tab.
 
 """
 
-import re
 import json
 from datetime import datetime
 import streamlit as st
@@ -28,22 +27,6 @@ from utils.sharepoint import (
 from backend.openai_client import create_openai_completion
 
 
-# Contact validation helpers 
-
-def _is_valid_email(email: str) -> bool:
-    if not email or not str(email).strip():
-        return False
-    return bool(re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
-                         str(email).strip()))
-
-
-def _is_valid_phone(phone: str) -> bool:
-    if not phone or not str(phone).strip():
-        return False
-    digits = re.sub(r'\D', '', str(phone).strip())
-    return len(digits) in (10, 11, 12)
-
-
 # Entry point 
 
 def render_analysis_tab(parsed_resumes, client):
@@ -65,7 +48,7 @@ def render_analysis_tab(parsed_resumes, client):
     </div>
     """, unsafe_allow_html=True)
 
-    # Job Description Input
+    # Job Description Input 
     st.subheader("📄 Step 1 — Enter the Job Details")
     sp_connected = st.session_state.get("sharepoint_config", {}).get("connected", False)
 
@@ -95,6 +78,7 @@ def render_analysis_tab(parsed_resumes, client):
         _render_sharepoint_jd_panel()
         job_desc = st.session_state.get("active_jd_text", "")
 
+    # Save JD to SharePoint 
     if job_desc and job_desc.strip() and sp_connected:
         with st.expander("☁️ Save this JD to SharePoint"):
             jd_name = st.text_input(
@@ -113,7 +97,7 @@ def render_analysis_tab(parsed_resumes, client):
 
     st.divider()
 
-    # Launch button
+    # Launch button 
     st.subheader("Step 2 — Run AI Screening")
     col_btn, col_info = st.columns([1, 2])
     with col_btn:
@@ -138,6 +122,10 @@ def render_analysis_tab(parsed_resumes, client):
 # SharePoint JD panel 
 
 def _render_sharepoint_jd_panel():
+    """
+    My JDs vs All JDs — split using the real SSO email (owner_email) returned
+    by SharePoint's Graph API lastModifiedBy field.
+    """
     sp = st.session_state.get("sharepoint_config", {})
 
     with st.spinner("Loading JDs from SharePoint…"):
@@ -147,10 +135,12 @@ def _render_sharepoint_jd_panel():
         st.info("No job descriptions found in SharePoint yet.")
         return
 
+    # user_email is set by sso.py from the Microsoft id_token
     user_email = (st.session_state.get("user_email", "") or "").lower().strip()
     my_jds    = [j for j in all_jds if j.get("owner_email", "") == user_email]
     other_jds = [j for j in all_jds if j not in my_jds]
 
+    # My JDs 
     st.markdown("**📂 My JDs** *(uploaded or last modified by you)*")
     if my_jds:
         my_display = [j.get("display_name", j["name"]) for j in my_jds]
@@ -174,8 +164,10 @@ def _render_sharepoint_jd_panel():
 
     st.divider()
 
+    # All Available JDs 
     st.markdown("**☁️ All Available JDs** *(from SharePoint — all users)*")
     if other_jds:
+        # Show the uploader's name alongside the JD name
         other_display = [
             f"{j.get('display_name', j['name'])}  ·  {j.get('owner_name', '')}"
             for j in other_jds
@@ -204,6 +196,7 @@ def _render_sharepoint_jd_panel():
     else:
         st.caption("No other JDs in SharePoint.")
 
+    # Delete confirmation 
     if st.session_state.get("_jd_pending_delete"):
         jd_to_del = st.session_state["_jd_pending_delete"]
         st.warning(
@@ -230,11 +223,13 @@ def _render_sharepoint_jd_panel():
 # Analysis core 
 
 def _run_full_analysis(parsed_resumes, client, job_desc):
+    """Score every candidate, sort highest first, pre-generate all docs."""
     st.session_state.review_results    = []
     st.session_state.selected_for_pool = set()
     st.session_state.pending_pool      = set()
     st.session_state.review_job_desc   = job_desc
 
+    # Clear cached docs from any previous run
     for k in list(st.session_state.keys()):
         if k.startswith(("docx_bytes_", "pptx_bytes_", "detailed_", "doc_check_")):
             del st.session_state[k]
@@ -245,6 +240,7 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
     status_box = st.empty()
     raw_results = []
 
+    # Phase 1: AI scoring 
     for idx, res_data in enumerate(res_list):
         name = res_data.get("name", f"Candidate {idx + 1}")
         status_box.markdown(
@@ -280,6 +276,7 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
     raw_results.sort(key=lambda x: x["final_score"], reverse=True)
     st.session_state.review_results = raw_results
 
+    # Phase 2: Pre-generate docs
     status_box2 = st.empty()
     progress2   = st.progress(0)
     for idx, item in enumerate(raw_results):
@@ -342,8 +339,8 @@ def _render_results(client):
     st.divider()
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Candidates",  total)
-    c2.metric("Selected for Pool", len(selected))   # shows COMMITTED count only
-    c3.metric("Still to Review",   total - len(selected))
+    c2.metric("Selected for Pool", len(pending))
+    c3.metric("Still to Review",   total - len(pending))
 
     col_sel, col_desel, col_move, _ = st.columns([1, 1, 1.6, 1.4])
     with col_sel:
@@ -351,14 +348,10 @@ def _render_results(client):
             st.session_state.pending_pool = {
                 r["metadata"].get("name", f"Candidate_{i}") for i, r in enumerate(results)
             }
-            for i in range(len(results)):
-                st.session_state[f"chk_{i}"] = True
             st.rerun()
     with col_desel:
         if st.button("☐ Clear All", use_container_width=True):
             st.session_state.pending_pool = set()
-            for i in range(len(results)):
-                st.session_state[f"chk_{i}"] = False
             st.rerun()
     with col_move:
         move_clicked = st.button(
@@ -366,8 +359,7 @@ def _render_results(client):
             type="primary", use_container_width=True, disabled=(len(pending) == 0),
         )
         if move_clicked:
-            # Commit in the SAME click — metrics update on the rerun that follows
-            st.session_state.selected_for_pool = set(pending)
+            st.session_state.selected_for_pool = set(st.session_state.pending_pool)
             st.toast(f"✅ {len(pending)} candidate(s) moved to pool!", icon="🎉")
             st.rerun()
 
@@ -385,25 +377,26 @@ def _render_results(client):
         tag = "☑ Added to Pool" if in_pool else ("🔲 Selected" if in_pending else "☐ Not Selected")
         expander_title = f"#{idx+1}  {name}  |  🎯 {final_score}% match  |  {tag}"
 
-        # No on_change callback — pending_pool updated inline, no rerun on tick
+        def _on_change(n=name):
+            k = f"chk_{results.index(next(r for r in results if r['metadata'].get('name') == n))}"
+            if st.session_state.get(k):
+                st.session_state.pending_pool.add(n)
+            else:
+                st.session_state.pending_pool.discard(n)
+
         col_chk, col_card = st.columns([0.01, 0.99])
         with col_chk:
-            checked = st.checkbox(
+            st.checkbox(
                 f"Select {name}", value=in_pending, key=f"chk_{idx}",
                 help="Tick to select — click 'Move to Candidate Pool' when done",
-                label_visibility="collapsed",
+                label_visibility="collapsed", on_change=_on_change,
             )
-            if checked:
-                st.session_state.pending_pool.add(name)
-            else:
-                st.session_state.pending_pool.discard(name)
-
         with col_card:
             with st.expander(expander_title, expanded=(idx == 0 and not in_pending)):
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_score_section(meta, final_score, item.get("breakdown", {}), item.get("reason", ""))
                 st.markdown("<br>", unsafe_allow_html=True)
-                _render_quality_section(analysis, meta)
+                _render_quality_section(analysis)
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_doc_buttons(client, name, meta, idx)
 
@@ -434,45 +427,11 @@ def _render_score_section(meta, final_score, breakdown=None, reason=""):
     else:
         bg, border, fg = "#FFFDE7", "#FFE082", "#E65100"
 
-    # Validate email and phone — show red "Not Available" if invalid
-    raw_email = meta.get("email", "")
-    raw_phone = meta.get("phone", "")
-    email_ok  = _is_valid_email(raw_email)
-    phone_ok  = _is_valid_phone(raw_phone)
-
     col_details, col_score = st.columns([2, 1])
     with col_details:
-        # Email
-        if email_ok:
-            st.markdown(
-                f"<p style='font-size:1.05rem;margin:6px 0;'>"
-                f"<strong>📧 Email:</strong> {raw_email}</p>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                "<p style='font-size:1.05rem;margin:6px 0;'>"
-                "<strong>📧 Email:</strong> "
-                "<span style='color:#DC2626;font-weight:600;'>Not Available</span></p>",
-                unsafe_allow_html=True,
-            )
-
-        # Phone
-        if phone_ok:
-            st.markdown(
-                f"<p style='font-size:1.05rem;margin:6px 0;'>"
-                f"<strong>📱 Phone:</strong> {raw_phone}</p>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown(
-                "<p style='font-size:1.05rem;margin:6px 0;'>"
-                "<strong>📱 Phone:</strong> "
-                "<span style='color:#DC2626;font-weight:600;'>Not Available</span></p>",
-                unsafe_allow_html=True,
-            )
-
         for label, value in [
+            ("📧 Email",        meta.get("email",          "Not provided")),
+            ("📱 Phone",        meta.get("phone",          "Not provided")),
             ("💼 Experience",   f"{meta.get('experience_years','?')} years"),
             ("🎯 Current Role", meta.get("current_role",   "Not specified")),
             ("💻 Key Skills",   str(meta.get("tech_stack", "N/A"))[:130]),
@@ -482,7 +441,6 @@ def _render_score_section(meta, final_score, breakdown=None, reason=""):
                 f"<strong>{label}:</strong> {value}</p>",
                 unsafe_allow_html=True,
             )
-
     with col_score:
         st.markdown(
             f"<div style='text-align:center;background:{bg};border:2px solid {border};"
@@ -543,9 +501,7 @@ def _render_score_breakdown(final_score, breakdown, reason):
     )
 
 
-# Quality section 
-
-def _render_quality_section(analysis, meta=None):
+def _render_quality_section(analysis):
     st.markdown("---")
     st.markdown("#### 📋 Resume Quality Check")
     if analysis.get("is_previous_employee"):
@@ -561,6 +517,7 @@ def _render_quality_section(analysis, meta=None):
         )
 
     def yellow_bullets(label, items):
+        import re
         atomic = []
         for raw in items:
             for p in re.split(r"(?<=[.!?])\s+(?=[A-Z])", str(raw).strip()):
@@ -587,34 +544,6 @@ def _render_quality_section(analysis, meta=None):
                 unsafe_allow_html=True,
             )
 
-    if meta is not None:
-        email_ok = _is_valid_email(meta.get("email", ""))
-        phone_ok = _is_valid_phone(meta.get("phone", ""))
-        if not email_ok and not phone_ok:
-            yellow_bullets(
-                "Missing contact information",
-                [
-                    "Email address not found or invalid",
-                    "Phone number not found or invalid (expected 10 digits local, "
-                    "or 11–12 digits with country code)",
-                ],
-            )
-        elif not email_ok:
-            yellow_bullets(
-                "Missing contact information",
-                ["Email address not found or invalid"],
-            )
-        elif not phone_ok:
-            yellow_bullets(
-                "Missing contact information",
-                [
-                    "Phone number not found or invalid (expected 10 digits local, "
-                    "or 11–12 digits with country code)"
-                ],
-            )
-        else:
-            green_box("Contact information", "Email and phone number both present and valid")
-
     gaps = analysis.get("career_gaps", [])
     yellow_bullets("Gaps in work history", gaps) if gaps else green_box("Work history", "No major gaps found")
 
@@ -624,7 +553,6 @@ def _render_quality_section(analysis, meta=None):
     concerns = analysis.get("fake_indicators", [])
     if concerns:
         yellow_bullets("Points that need a closer look", concerns)
-
 
 
 def _render_doc_buttons(client, name, meta, idx):
@@ -682,6 +610,7 @@ def _render_doc_buttons(client, name, meta, idx):
 # Scoring 
 
 def _score_single(client, candidate_data: dict, job_desc: str) -> tuple:
+    """Score one candidate against the JD using OpenAI gpt-4o-mini."""
     summary = (
         f"Name: {candidate_data.get('name', 'N/A')}\n"
         f"Experience: {candidate_data.get('experience_years', 'N/A')} years\n"
