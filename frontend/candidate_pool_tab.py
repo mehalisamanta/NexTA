@@ -1,9 +1,10 @@
 """
-Candidate Pool Tab 
+Candidate Pool Tab
 
 """
 
 import io
+import re
 from datetime import datetime
 import streamlit as st
 import pandas as pd
@@ -16,6 +17,26 @@ def _sp_config():
 
 def _sp_connected():
     return _sp_config().get('connected', False)
+
+
+def _is_valid_email(val: str) -> bool:
+    """Basic email format check."""
+    if not val or str(val).strip() in ("", "N/A", "None", "nan", "none"):
+        return False
+    return bool(re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", str(val).strip()))
+
+
+def _is_valid_phone(val: str) -> bool:
+    """Check phone has at least 7 digits."""
+    if not val or str(val).strip() in ("", "N/A", "None", "nan", "none"):
+        return False
+    digits = re.sub(r"\D", "", str(val))
+    return len(digits) >= 7
+
+
+def _fmt(val, validator) -> str:
+    """Return value if valid, else empty string (cell styled separately)."""
+    return str(val).strip() if validator(val) else ""
 
 
 def render_candidate_pool_tab():
@@ -61,7 +82,7 @@ def render_candidate_pool_tab():
     </div>
     """, unsafe_allow_html=True)
 
-    # Build display table with scores 
+    # Build display table 
     score_map = {
         r['metadata'].get('name'): r.get('final_score', '—')
         for r in review_results
@@ -69,29 +90,61 @@ def render_candidate_pool_tab():
 
     rows = []
     for r in selected_resumes:
-        name = r.get('name', '')
+        name  = r.get('name', '')
+        email = r.get('email', '')
+        phone = r.get('phone', '')
         rows.append({
-            'Candidate Name':  name,
-            'AI Match Score':  f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
-            'Current Role':    r.get('current_role', ''),
+            'Candidate Name':   name,
+            'AI Match Score':   f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
+            'Current Role':     r.get('current_role', ''),
             'Experience (yrs)': r.get('experience_years', ''),
-            'Email':           r.get('email', ''),
-            'Phone':           r.get('phone', ''),
-            'Key Skills':      str(r.get('tech_stack', ''))[:80],
-            'Education':       r.get('education', ''),
+            'Email':            email if _is_valid_email(email) else None,
+            'Phone':            phone if _is_valid_phone(phone) else None,
+            'Key Skills':       str(r.get('tech_stack', ''))[:80],
+            'Education':        r.get('education', ''),
         })
 
-    # Sort by score descending
     def _score_val(row):
         s = str(row.get('AI Match Score', '0')).replace('%', '').strip()
-        try: return float(s)
+        try:    return float(s)
         except: return 0
 
     rows.sort(key=_score_val, reverse=True)
     pool_df = pd.DataFrame(rows)
 
+    # Render table with red "None" for missing contact fields 
     st.subheader("📊 Pool Overview")
-    st.dataframe(pool_df, use_container_width=True, hide_index=True)
+
+    def _style_none_red(df):
+        """Apply red colour to cells that are None/NaN in Email and Phone columns."""
+        styled = pd.DataFrame("", index=df.index, columns=df.columns)
+        for col in ["Email", "Phone"]:
+            if col in df.columns:
+                mask = df[col].isna() | (df[col] == "")
+                styled.loc[mask, col] = "color: #DC2626; font-weight: 600;"
+        return styled
+
+    # Fill None with display text "None" for the styled table
+    display_df = pool_df.copy()
+    for col in ["Email", "Phone"]:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].fillna("None")
+
+    styled = display_df.style.apply(
+        lambda _: [
+            "color: #DC2626; font-weight: 600;"
+            if display_df.loc[row_idx, col] == "None" and col in ("Email", "Phone")
+            else ""
+            for col in display_df.columns
+        ],
+        axis=1,
+        result_type="expand",
+    )
+    # Rename columns to match display_df
+    styled.columns = display_df.columns
+
+    st.dataframe(display_df.style.apply(_style_none_red, axis=None),
+                 use_container_width=True, hide_index=True)
 
     # Download & SharePoint 
     st.markdown("#### 💾 Export Pool Data")

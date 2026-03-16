@@ -27,6 +27,8 @@ EVALUATION CHECKLIST:
    seem realistic (e.g., 10 years in a technology only 3 years old).
 4. OVERLAPPING DATES: Identify overlapping employment dates or suspicious claims.
 5. EXPERTISE AREAS: List primary areas of expertise and domain knowledge.
+6. CONTACT INFORMATION: Check if phone number and email address are present.
+   If either is missing, list them in missing_contact_info.
 
 Resume Text:
 {resume_text[:8000]}
@@ -39,6 +41,7 @@ Return ONLY a valid JSON object with this exact structure:
     "technical_anomalies": ["anomaly description 1"],
     "fake_indicators": ["concern description 1"],
     "domain_knowledge": ["expertise area 1", "expertise area 2"],
+    "missing_contact_info": [],
     "summary": "brief overall assessment"
 }}
 
@@ -70,11 +73,12 @@ Use empty arrays for any category with no findings."""
 
     def _empty_result(self) -> dict:
         return {
-            "is_previous_employee":   False,
+            "is_previous_employee":    False,
             "nexturn_history_details": "None",
-            "career_gaps":            [],
-            "technical_anomalies":    [],
-            "fake_indicators":        [],
-            "domain_knowledge":       [],
-            "summary":                "Analysis could not be completed",
+            "career_gaps":             [],
+            "technical_anomalies":     [],
+            "fake_indicators":         [],
+            "domain_knowledge":        [],
+            "missing_contact_info":    [],
+            "summary":                 "Analysis could not be completed",
         }

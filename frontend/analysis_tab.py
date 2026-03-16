@@ -329,38 +329,46 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
 def _render_results(client):
     results  = st.session_state.review_results
     selected = st.session_state.selected_for_pool
-
-    if "pending_pool" not in st.session_state:
-        st.session_state.pending_pool = set(selected)
-
-    pending = st.session_state.pending_pool
-    total   = len(results)
+    total    = len(results)
 
     st.divider()
+
+    committed = len(selected)
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Candidates",  total)
-    c2.metric("Selected for Pool", len(pending))
-    c3.metric("Still to Review",   total - len(pending))
+    c1.metric("Total Candidates", total)
+    c2.metric("Added to Pool",    committed)
+    c3.metric("Yet to Review",    total - committed)
 
     col_sel, col_desel, col_move, _ = st.columns([1, 1, 1.6, 1.4])
+
     with col_sel:
         if st.button("✅ Select All", use_container_width=True):
-            st.session_state.pending_pool = {
-                r["metadata"].get("name", f"Candidate_{i}") for i, r in enumerate(results)
-            }
+            # Set all checkbox keys to True directly in session_state
+            for i in range(total):
+                st.session_state[f"chk_{i}"] = True
             st.rerun()
+
     with col_desel:
         if st.button("☐ Clear All", use_container_width=True):
-            st.session_state.pending_pool = set()
+            for i in range(total):
+                st.session_state[f"chk_{i}"] = False
             st.rerun()
+
     with col_move:
+        # Count how many boxes are currently ticked by reading keys directly
+        ticked = [
+            results[i]["metadata"].get("name", f"Candidate_{i}")
+            for i in range(total)
+            if st.session_state.get(f"chk_{i}", False)
+        ]
         move_clicked = st.button(
-            f"Move to Candidate Pool ({len(pending)})",
-            type="primary", use_container_width=True, disabled=(len(pending) == 0),
+            f"➕ Move to Candidate Pool ({len(ticked)})",
+            type="primary", use_container_width=True, disabled=(len(ticked) == 0),
         )
         if move_clicked:
-            st.session_state.selected_for_pool = set(st.session_state.pending_pool)
-            st.toast(f"✅ {len(pending)} candidate(s) moved to pool!", icon="🎉")
+            # Only NOW write to session_state — single rerun, metrics update
+            st.session_state.selected_for_pool = set(ticked)
+            st.toast(f"✅ {len(ticked)} candidate(s) moved to pool!", icon="🎉")
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -371,28 +379,22 @@ def _render_results(client):
         analysis    = item["analysis"]
         final_score = item.get("final_score", 0)
         name        = meta.get("name", f"Candidate_{idx+1}")
-        in_pending  = name in pending
         in_pool     = name in selected
+        is_checked  = st.session_state.get(f"chk_{idx}", False)
 
-        tag = "☑ Added to Pool" if in_pool else ("🔲 Selected" if in_pending else "☐ Not Selected")
+        tag = "☑ Added to Pool" if in_pool else ("🔲 Selected" if is_checked else "☐ Not Selected")
         expander_title = f"#{idx+1}  {name}  |  🎯 {final_score}% match  |  {tag}"
-
-        def _on_change(n=name):
-            k = f"chk_{results.index(next(r for r in results if r['metadata'].get('name') == n))}"
-            if st.session_state.get(k):
-                st.session_state.pending_pool.add(n)
-            else:
-                st.session_state.pending_pool.discard(n)
 
         col_chk, col_card = st.columns([0.01, 0.99])
         with col_chk:
             st.checkbox(
-                f"Select {name}", value=in_pending, key=f"chk_{idx}",
+                f"Select {name}",
+                key=f"chk_{idx}",
                 help="Tick to select — click 'Move to Candidate Pool' when done",
-                label_visibility="collapsed", on_change=_on_change,
+                label_visibility="collapsed",
             )
         with col_card:
-            with st.expander(expander_title, expanded=(idx == 0 and not in_pending)):
+            with st.expander(expander_title, expanded=(idx == 0 and not is_checked)):
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_score_section(meta, final_score, item.get("breakdown", {}), item.get("reason", ""))
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -400,20 +402,12 @@ def _render_results(client):
                 st.markdown("<br>", unsafe_allow_html=True)
                 _render_doc_buttons(client, name, meta, idx)
 
-    if pending:
+    if selected:
         st.divider()
-        pending_only = len(pending - selected)
-        committed    = len(selected)
-        if pending_only > 0:
-            st.info(
-                f"**{pending_only}** candidate(s) selected but not yet moved to pool. "
-                "Click **Move to Candidate Pool** above to confirm."
-            )
-        if committed > 0:
-            st.success(
-                f"**{committed}** candidate(s) already in pool. "
-                "Go to the **Candidate Pool** tab to view the shortlist."
-            )
+        st.success(
+            f"**{committed}** candidate(s) in pool. "
+            "Go to the **Candidate Pool** tab to view the shortlist."
+        )
 
 
 # Score section 
@@ -553,6 +547,13 @@ def _render_quality_section(analysis):
     concerns = analysis.get("fake_indicators", [])
     if concerns:
         yellow_bullets("Points that need a closer look", concerns)
+
+    # Missing contact info
+    missing_contact = analysis.get("missing_contact_info", [])
+    if missing_contact:
+        yellow_bullets("Missing Contact Information", missing_contact)
+    else:
+        green_box("Contact Information", "Phone number and email are present")
 
 
 def _render_doc_buttons(client, name, meta, idx):
