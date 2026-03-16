@@ -39,26 +39,36 @@ def parse_resume_with_openai(
         text_to_send = resume_text
 
     prompt = f"""You are an expert resume parser. Extract the following fields from the resume below.
-Return ONLY a JSON object — no markdown, no explanation, no preamble.
+Return ONLY a valid JSON object. Do not include any markdown backticks, explanations, or preamble.
 
 Fields to extract:
 {{
-  "name":             "Full Name",
-  "email":            "email address or empty string",
-  "phone":            "phone number or empty string",
-  "current_role":     "most recent job title",
-  "experience_years": "total years of professional experience as a number e.g. 4.5",
-  "tech_stack":       "comma-separated list of technical skills",
-  "education":        "highest degree and institution",
-  "key_projects":     "brief description of 1-3 key projects",
-  "certifications":   "any certifications or empty string",
-  "objective":        "professional summary or objective statement"
+  "name": "Full Name",
+  "email": "email address or empty string",
+  "phone": "phone number or empty string",
+  "current_role": "most recent job title",
+  "experience_years": "total years of professional experience as a number",
+  "tech_stack": "comma-separated list of technical skills",
+  "education": "highest degree and institution",
+  "key_projects": [
+    {{
+      "title": "Project Title",
+      "duration": "Duration or Dates",
+      "role": "Job Role",
+      "description": "Short project summary",
+      "responsibilities": ["bullet 1", "bullet 2"]
+    }}
+  ],
+  "certifications": "any certifications or empty string",
+  "objective": "professional summary"
 }}
 
 RULES:
-- experience_years must be a number (float or int). If not stated, estimate from work history.
-- tech_stack must be a comma-separated string, not a list.
-- If a field is not found, use an empty string.
+- Extract exactly 4 projects. 
+- If fewer than 4 projects exist in the resume, fill the remaining slots in the 'key_projects' list with objects containing empty strings for all fields.
+- 'responsibilities' must be a list of strings.
+- 'duration', 'role', 'title', 'description' must be strings.
+- If a specific field is not found, use an empty string "".
 - Do not fabricate information.
 
 Resume text:
@@ -85,6 +95,10 @@ Resume text:
             return None
 
         data = json.loads(raw[j_start:j_end])
+        # --- ADD THIS TO ENSURE COMPATIBILITY ---
+        if not isinstance(data.get("key_projects"), list):
+            data["key_projects"] = []
+        # ----------------------------------------
 
         # Ensure experience_years is a number
         try:

@@ -72,16 +72,20 @@ candidate_data = {
 
 def main():
     print("⏳ Generating Extended PPT...")
-    ppt_bytes = generate_candidate_ppt(candidate_data)
-
-    if ppt_bytes:
-        output_path = "test_candidate_output_full.pptx"
-        with open(output_path, "wb") as f:
-            f.write(ppt_bytes)
-        print(f"✅ Success! File saved as: {output_path}")
-        print("💡 Check Slide 5 to see if the long descriptions fit correctly.")
-    else:
-        print("❌ Failed to generate PPT. Check for errors in the console.")
-
+    try:
+        ppt_bytes = generate_candidate_ppt(candidate_data)
+        
+        if ppt_bytes:
+            output_path = "test_candidate_output_full.pptx"
+            with open(output_path, "wb") as f:
+                f.write(ppt_bytes)
+            print(f"✅ Success! File saved as: {output_path}")
+        else:
+            print("❌ The function returned None/Empty.")
+            
+    except Exception as e:
+        print(f"❌ CRASHED with error: {e}")
+        import traceback
+        traceback.print_exc() # This will show exactly which line in backend failed
 if __name__ == "__main__":
     main()
