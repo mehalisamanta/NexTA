@@ -10,12 +10,44 @@ import streamlit as st
 from backend.openai_client import create_openai_completion
 
 
+# PII extraction helpers 
+
+def _extract_email(text: str) -> str:
+    """Extract first valid email from raw text."""
+    match = re.search(
+        r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+        text
+    )
+    return match.group(0).strip() if match else ""
+
+
+def _extract_phone(text: str) -> str:
+    """
+    Extract first phone number from raw text.
+    Matches international and local formats:
+      +91 98765 43210 / (123) 456-7890 / 07911 123456 etc.
+    """
+    match = re.search(
+        r"(\+?\d[\d\s\-().]{7,}\d)",
+        text
+    )
+    return match.group(0).strip() if match else ""
+
+
 def _mask_pii(text: str) -> str:
-    """Redact email addresses and phone numbers before sending to AI."""
-    text = re.sub(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", "[EMAIL]", text)
-    text = re.sub(r"(\+?\d[\d\s\-().]{7,}\d)", "[PHONE]", text)
+    """Replace emails and phone numbers with placeholders before sending to AI."""
+    text = re.sub(
+        r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+        "[EMAIL]", text
+    )
+    text = re.sub(
+        r"(\+?\d[\d\s\-().]{7,}\d)",
+        "[PHONE]", text
+    )
     return text
 
+
+# Main parser 
 
 def parse_resume_with_openai(
     client,
@@ -27,12 +59,23 @@ def parse_resume_with_openai(
     """
     Parse a single resume into a structured dict using OpenAI gpt-4o-mini.
 
+    When mask_pii=True (default):
+      1. Email and phone are extracted from original text via regex
+      2. Masked text is sent to AI (AI never sees real contact details)
+      3. AI result is returned with real email/phone injected back in
+
     Returns a dict with keys:
         name, email, phone, current_role, experience_years,
         tech_stack, education, key_projects, certifications,
         objective, submission_date, source_file
     Returns None if parsing fails.
     """
+
+    # Step 1: Extract real contact details BEFORE masking 
+    real_email = _extract_email(resume_text)
+    real_phone = _extract_phone(resume_text)
+
+    # Step 2: Mask PII before sending to AI 
     if mask_pii:
         text_to_send = _mask_pii(resume_text)
     else:
@@ -86,9 +129,16 @@ Resume text:
 
         data = json.loads(raw[j_start:j_end])
 
+        # Step 3: Restore real contact details 
+        if mask_pii:
+            data["email"] = real_email
+            data["phone"] = real_phone
+
         # Ensure experience_years is a number
         try:
-            data["experience_years"] = float(str(data.get("experience_years", 0)).replace("+", ""))
+            data["experience_years"] = float(
+                str(data.get("experience_years", 0)).replace("+", "")
+            )
         except (ValueError, TypeError):
             data["experience_years"] = 0.0
 

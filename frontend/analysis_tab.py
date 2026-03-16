@@ -78,7 +78,7 @@ def render_analysis_tab(parsed_resumes, client):
         _render_sharepoint_jd_panel()
         job_desc = st.session_state.get("active_jd_text", "")
 
-    # Save JD to SharePoint 
+    # Save JD to SharePoint
     if job_desc and job_desc.strip() and sp_connected:
         with st.expander("☁️ Save this JD to SharePoint"):
             jd_name = st.text_input(
@@ -410,6 +410,21 @@ def _render_results(client):
         )
 
 
+# Contact validators (shared with candidate_pool_tab) 
+
+import re as _re
+
+def _valid_email(val: str) -> bool:
+    if not val or str(val).strip() in ("", "N/A", "None", "nan", "[EMAIL]"):
+        return False
+    return bool(_re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", str(val).strip()))
+
+def _valid_phone(val: str) -> bool:
+    if not val or str(val).strip() in ("", "N/A", "None", "nan", "[PHONE]"):
+        return False
+    return len(_re.sub(r"\D", "", str(val))) >= 7
+
+
 # Score section 
 
 def _render_score_section(meta, final_score, breakdown=None, reason=""):
@@ -423,9 +438,36 @@ def _render_score_section(meta, final_score, breakdown=None, reason=""):
 
     col_details, col_score = st.columns([2, 1])
     with col_details:
+        email = meta.get("email", "")
+        phone = meta.get("phone", "")
+
+        email_ok = _valid_email(email)
+        phone_ok = _valid_phone(phone)
+
+        # Email row — red "Not available" if invalid/missing
+        email_html = (
+            f"<span>{email}</span>"
+            if email_ok else
+            "<span style='color:#DC2626;font-weight:600;'>Not available</span>"
+        )
+        # Phone row — red "Not available" if invalid/missing
+        phone_html = (
+            f"<span>{phone}</span>"
+            if phone_ok else
+            "<span style='color:#DC2626;font-weight:600;'>Not available</span>"
+        )
+
+        st.markdown(
+            f"<p style='font-size:1.05rem;margin:6px 0;'>"
+            f"<strong>📧 Email:</strong> {email_html}</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<p style='font-size:1.05rem;margin:6px 0;'>"
+            f"<strong>📱 Phone:</strong> {phone_html}</p>",
+            unsafe_allow_html=True,
+        )
         for label, value in [
-            ("📧 Email",        meta.get("email",          "Not provided")),
-            ("📱 Phone",        meta.get("phone",          "Not provided")),
             ("💼 Experience",   f"{meta.get('experience_years','?')} years"),
             ("🎯 Current Role", meta.get("current_role",   "Not specified")),
             ("💻 Key Skills",   str(meta.get("tech_stack", "N/A"))[:130]),

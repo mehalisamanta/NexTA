@@ -4,12 +4,13 @@ Candidate Pool Tab
 """
 
 import io
-import re
 from datetime import datetime
 import streamlit as st
 import pandas as pd
 from utils.scoring import format_dataframe_for_display
 from utils.sharepoint import SHAREPOINT_AVAILABLE, save_csv_to_sharepoint
+from frontend.analysis_tab import _valid_email as _is_valid_email
+from frontend.analysis_tab import _valid_phone as _is_valid_phone
 
 
 def _sp_config():
@@ -17,26 +18,6 @@ def _sp_config():
 
 def _sp_connected():
     return _sp_config().get('connected', False)
-
-
-def _is_valid_email(val: str) -> bool:
-    """Basic email format check."""
-    if not val or str(val).strip() in ("", "N/A", "None", "nan", "none"):
-        return False
-    return bool(re.match(r"[^@\s]+@[^@\s]+\.[^@\s]+", str(val).strip()))
-
-
-def _is_valid_phone(val: str) -> bool:
-    """Check phone has at least 7 digits."""
-    if not val or str(val).strip() in ("", "N/A", "None", "nan", "none"):
-        return False
-    digits = re.sub(r"\D", "", str(val))
-    return len(digits) >= 7
-
-
-def _fmt(val, validator) -> str:
-    """Return value if valid, else empty string (cell styled separately)."""
-    return str(val).strip() if validator(val) else ""
 
 
 def render_candidate_pool_tab():

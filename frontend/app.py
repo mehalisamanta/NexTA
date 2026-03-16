@@ -10,10 +10,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 from PIL import Image
 
-# ── Make project root importable (Windows-safe) ───────────────────────────────
-# Strategy 1: parent of this file's directory
 _by_file = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Strategy 2: current working directory (where `streamlit run` was called from)
 _by_cwd = os.getcwd()
 for _root in (_by_file, _by_cwd):
     if _root not in sys.path:
@@ -32,7 +29,7 @@ from frontend.tabs import render_upload_tab, render_analytics_tab
 from frontend.analysis_tab import render_analysis_tab
 from frontend.candidate_pool_tab import render_candidate_pool_tab
 
-# Page config (must be first Streamlit call) ───────────────────────────────
+# Page config
 st.set_page_config(**PAGE_CONFIG)
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 st.markdown("""
@@ -119,11 +116,6 @@ def _init_sharepoint():
 # Main 
 
 def main():
-    # SSO gate 
-    # render_sso_login() handles the entire OAuth 2.0 flow:
-    #   • Not logged in       → shows "Sign in with Microsoft" button → returns False
-    #   • ?code= present      → exchanges for token, stores name/email → reruns
-    #   • Already logged in   → returns True immediately
     if not render_sso_login():
         return
 
@@ -163,12 +155,12 @@ def main():
         st.markdown(
             "<div style='background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;"
             "padding:10px 12px;font-size:0.88rem;color:#92400E;'>"
-            "⚠️ <strong>PII Masking is always ON</strong><br>"
-            "<span style='font-size:0.82rem;'>Personal details (email, phone) are always "
-            "redacted before AI processing.</span></div>",
+            "🔒 <strong>PII Masking is ON</strong><br>"
+            "<span style='font-size:0.82rem;'>Email and phone are masked before AI "
+            "processing.</span></div>",
             unsafe_allow_html=True,
         )
-        mask_pii_enabled = True  # always enforced
+        mask_pii_enabled = True  # mask for AI, real values restored after parsing
 
         st.divider()
 
