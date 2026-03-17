@@ -651,6 +651,17 @@ def _render_doc_buttons(client, name, meta, idx):
             st.caption("⏳ Word doc generating…")
     with col_ppt:
         pptx_bytes = st.session_state.get(ppt_key)
+        # #region agent log
+        try:
+            debug_log(
+                location="frontend/analysis_tab.py:_render_doc_buttons:ppt_presence",
+                message="PPT bytes presence for candidate",
+                hypothesis_id="H2",
+                data={"candidate": name, "ppt_bytes_present": bool(pptx_bytes)},
+            )
+        except Exception:
+            pass
+        # #endregion
         if pptx_bytes:
             st.download_button(
                 "⬇️ Download PPT Profile", data=pptx_bytes,
