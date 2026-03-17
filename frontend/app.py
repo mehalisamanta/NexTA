@@ -16,6 +16,8 @@ for _root in (_by_file, _by_cwd):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from utils.debug_log import debug_log
+
 try:
     from dotenv import load_dotenv
     load_dotenv(override=True)
@@ -42,6 +44,15 @@ div[data-testid="stExpander"] summary span {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# #region agent log
+debug_log(
+    location="frontend/app.py:startup",
+    message="streamlit app startup",
+    hypothesis_id="H0",
+    data={"cwd": os.getcwd()},
+)
+# #endregion
 
 
 # Session state defaults 

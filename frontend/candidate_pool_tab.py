@@ -11,6 +11,7 @@ from utils.scoring import format_dataframe_for_display
 from utils.sharepoint import SHAREPOINT_AVAILABLE, save_csv_to_sharepoint
 from frontend.analysis_tab import _valid_email as _is_valid_email
 from frontend.analysis_tab import _valid_phone as _is_valid_phone
+from utils.debug_log import debug_log
 
 
 def _sp_config():
@@ -74,16 +75,40 @@ def render_candidate_pool_tab():
         name  = r.get('name', '')
         email = r.get('email', '')
         phone = r.get('phone', '')
+        exp_v = r.get('experience_years', '')
         rows.append({
             'Candidate Name':   name,
             'AI Match Score':   f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
             'Current Role':     r.get('current_role', ''),
-            'Experience (yrs)': r.get('experience_years', ''),
+            'Experience (yrs)': exp_v,
             'Email':            email if _is_valid_email(email) else None,
             'Phone':            phone if _is_valid_phone(phone) else None,
             'Key Skills':       str(r.get('tech_stack', ''))[:80],
             'Education':        r.get('education', ''),
         })
+
+    try:
+        # Log a small sample to diagnose float formatting + None display
+        sample = rows[:5]
+        debug_log(
+            location="frontend/candidate_pool_tab.py:render_candidate_pool_tab:rows_built",
+            message="candidate pool rows built (sample)",
+            hypothesis_id="H3",
+            data={
+                "selected_count": len(rows),
+                "sample": [
+                    {
+                        "name": rr.get("Candidate Name", ""),
+                        "exp": rr.get("Experience (yrs)", None),
+                        "email_is_none": rr.get("Email", "x") is None,
+                        "phone_is_none": rr.get("Phone", "x") is None,
+                    }
+                    for rr in sample
+                ],
+            },
+        )
+    except Exception:
+        pass
 
     def _score_val(row):
         s = str(row.get('AI Match Score', '0')).replace('%', '').strip()

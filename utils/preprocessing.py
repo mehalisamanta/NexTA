@@ -8,6 +8,7 @@ import json
 import re
 import streamlit as st
 from backend.openai_client import create_openai_completion
+from utils.debug_log import debug_log
 
 
 def _extract_email(text: str) -> str:
@@ -102,6 +103,23 @@ Resume text:
 
         data = json.loads(raw[j_start:j_end])
 
+        debug_log(
+            location="utils/preprocessing.py:parse_resume_with_openai:after_json_load",
+            message="parsed resume JSON from OpenAI",
+            hypothesis_id="H1",
+            data={
+                "filename": filename,
+                "mask_pii": bool(mask_pii),
+                "resume_len": len(resume_text or ""),
+                "text_sent_len": len(text_to_send or ""),
+                "real_email_found": bool(real_email),
+                "real_phone_found": bool(real_phone),
+                "has_key_projects": isinstance(data.get("key_projects"), list),
+                "key_projects_len": len(data.get("key_projects") or []) if isinstance(data.get("key_projects"), list) else None,
+                "experience_years_raw": data.get("experience_years", None),
+            },
+        )
+
         # Ensure key_projects is always a list of exactly 4 items
         if not isinstance(data.get("key_projects"), list):
             data["key_projects"] = []
@@ -125,10 +143,43 @@ Resume text:
         except (ValueError, TypeError):
             data["experience_years"] = 0.0
 
+        # Summarize projects after normalization (avoid logging resume content)
+        try:
+            proj_summ = []
+            for p in (data.get("key_projects") or [])[:4]:
+                if isinstance(p, dict):
+                    proj_summ.append(
+                        {
+                            "title": (p.get("title") or "")[:80],
+                            "has_duration": bool((p.get("duration") or "").strip()),
+                            "has_role": bool((p.get("role") or "").strip()),
+                            "has_description": bool((p.get("description") or "").strip()),
+                            "resp_len": len(p.get("responsibilities") or []) if isinstance(p.get("responsibilities"), list) else None,
+                        }
+                    )
+            debug_log(
+                location="utils/preprocessing.py:parse_resume_with_openai:normalized",
+                message="normalized resume parse output",
+                hypothesis_id="H1",
+                data={
+                    "filename": filename,
+                    "experience_years": data.get("experience_years"),
+                    "projects": proj_summ,
+                },
+            )
+        except Exception:
+            pass
+
         data["submission_date"] = upload_date
         data["source_file"]     = filename
         return data
 
     except Exception as e:
         st.warning(f"Could not parse {filename}: {e}")
+        debug_log(
+            location="utils/preprocessing.py:parse_resume_with_openai:exception",
+            message="exception while parsing resume with OpenAI",
+            hypothesis_id="H1",
+            data={"filename": filename, "error": repr(e)},
+        )
         return None

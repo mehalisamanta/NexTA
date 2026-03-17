@@ -17,6 +17,7 @@ from utils.resume_formatter import (
 )
 from utils.ppt_generator import generate_candidate_ppt
 from utils.template_mapper import map_to_template_format
+from utils.debug_log import debug_log
 from utils.sharepoint import (
     SHAREPOINT_AVAILABLE,
     upload_jd_to_sharepoint,
@@ -312,6 +313,26 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
 
         if ppt_key not in st.session_state:
             try:
+                # Instrumentation: compare mapping sources (metadata vs detailed)
+                try:
+                    mapped_from_meta = map_to_template_format(item["metadata"])
+                    mapped_from_det  = map_to_template_format(detailed)
+                    debug_log(
+                        location="frontend/analysis_tab.py:_run_full_analysis:ppt_prep",
+                        message="preparing PPT mapping from metadata vs detailed",
+                        hypothesis_id="H2",
+                        data={
+                            "candidate": name,
+                            "meta_has_key_projects": isinstance(item["metadata"].get("key_projects"), list),
+                            "meta_key_projects_len": len(item["metadata"].get("key_projects") or []) if isinstance(item["metadata"].get("key_projects"), list) else None,
+                            "det_has_key_projects": isinstance(detailed.get("key_projects"), list),
+                            "meta_project1": (mapped_from_meta.get("PROJECT1_NAME") or "")[:80],
+                            "det_project1": (mapped_from_det.get("PROJECT1_NAME") or "")[:80],
+                        },
+                    )
+                except Exception:
+                    pass
+
                 mapped = map_to_template_format(detailed)
                 st.session_state[ppt_key] = generate_candidate_ppt({**detailed, **mapped})
             except Exception:
@@ -592,6 +613,17 @@ def _render_quality_section(analysis):
 
     # Missing contact info
     missing_contact = analysis.get("missing_contact_info", [])
+    try:
+        debug_log(
+            location="frontend/analysis_tab.py:_render_quality_section:missing_contact",
+            message="resume quality check missing_contact_info",
+            hypothesis_id="H4",
+            data={
+                "missing_contact_raw": missing_contact if isinstance(missing_contact, list) else str(missing_contact),
+            },
+        )
+    except Exception:
+        pass
     if missing_contact:
         yellow_bullets("Missing Contact Information", missing_contact)
     else:

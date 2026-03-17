@@ -13,6 +13,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_AUTO_SIZE
 
 from utils.template_mapper import map_to_template_format
+from utils.debug_log import debug_log
 
 
 TEMPLATE_PATH = os.path.join(
@@ -162,6 +163,19 @@ def generate_candidate_ppt(candidate_data: dict) -> bytes | None:
 
         prs = Presentation(TEMPLATE_PATH)
         d   = map_to_template_format(candidate_data)
+
+        debug_log(
+            location="utils/ppt_generator.py:generate_candidate_ppt",
+            message="PPT generation input mapped",
+            hypothesis_id="H2",
+            data={
+                "input_keys_sample": list((candidate_data or {}).keys())[:25],
+                "mapped_full_name": (d.get("FULL_NAME") or "")[:80],
+                "mapped_role": (d.get("CURRENT_ROLE") or "")[:80],
+                "mapped_proj1": (d.get("PROJECT1_NAME") or "")[:80],
+                "mapped_proj1_resp_len": len(d.get("PROJECT1_RESPONSIBILITIES") or ""),
+            },
+        )
 
         if len(prs.slides) >= 1:
             _populate_slide1(prs.slides[0], d)
