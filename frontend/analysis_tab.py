@@ -357,7 +357,7 @@ def _render_results(client):
             if st.session_state.get(f"chk_{i}", False)
         ]
         move_clicked = st.button(
-            f"➕ Move to Candidate Pool ({len(ticked)})",
+            f" Move to Candidate Pool ({len(ticked)})",
             type="primary",
             use_container_width=True,
             disabled=(len(ticked) == 0),
