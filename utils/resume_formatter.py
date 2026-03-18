@@ -7,8 +7,6 @@ import io
 import os
 import json
 import copy
-import time
-import importlib
 import sys
 import traceback
 import re
@@ -20,8 +18,17 @@ from utils.preprocessing import parse_resume_locally
 
 
 def _import_docx_document():
-
-    from docx.oxml.ns import qn  # type: ignore[import]
+    try:
+        from docx import Document
+    except Exception:
+        try:
+            from docx.api import Document
+        except Exception as e_api:
+            raise ImportError(
+                "Could not import Document from python-docx. "
+                "Uninstall the legacy 'docx' package and ensure 'python-docx' is installed."
+            ) from e_api
+    from docx.oxml.ns import qn
     return Document, qn
 
 
