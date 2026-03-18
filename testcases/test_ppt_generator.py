@@ -1,10 +1,10 @@
 import os
 import sys
 
-# Ensure the project root is in the path so 'utils' can be imported
+# Ensure the project root is in the path so 'backend' can be imported
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from utils.ppt_generator import generate_candidate_ppt
+from backend.ppt_generator import generate_candidate_ppt
 
 candidate_data = {
     # Slide 1: Profile

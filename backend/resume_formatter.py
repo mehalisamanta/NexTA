@@ -14,7 +14,7 @@ import re
 import streamlit as st
 
 from backend.openai_client import create_openai_completion
-from utils.preprocessing import parse_resume_locally
+from backend.preprocessing import parse_resume_locally
 
 
 def _import_docx_document():

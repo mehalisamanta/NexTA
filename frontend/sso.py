@@ -1,23 +1,23 @@
 """
 backend/sso.py
 Microsoft SSO Authentication
-
+ 
 """
-
+ 
 import os
 from urllib.parse import urlparse
-
+ 
 import streamlit as st
-
+ 
 try:
     import msal
     MSAL_AVAILABLE = True
 except ImportError:
     MSAL_AVAILABLE = False
-
-
-# Config helpers 
-
+ 
+ 
+# Config helpers
+ 
 def _cfg() -> dict:
     """Read Azure credentials from env or Streamlit secrets."""
     def _get(key: str) -> str:
@@ -28,15 +28,15 @@ def _cfg() -> dict:
             except Exception:
                 pass
         return val or ""
-
+ 
     return {
         "tenant_id":     _get("AZURE_TENANT_ID"),
         "client_id":     _get("AZURE_CLIENT_ID"),
         "client_secret": _get("AZURE_CLIENT_SECRET"),
         "redirect_uri":  _get("AZURE_REDIRECT_URI") or "http://localhost:8501/",
     }
-
-
+ 
+ 
 def _msal_app(cfg: dict):
     """Build a ConfidentialClientApplication from config."""
     authority = f"https://login.microsoftonline.com/{cfg['tenant_id']}"
@@ -45,13 +45,13 @@ def _msal_app(cfg: dict):
         authority=authority,
         client_credential=cfg["client_secret"],
     )
-
-
+ 
+ 
 _SCOPES = ["User.Read"]
-
-
-# Public API 
-
+ 
+ 
+# Public API
+ 
 def get_auth_url() -> str:
     """Return the Microsoft login URL to redirect the user to."""
     cfg = _cfg()
@@ -60,8 +60,8 @@ def get_auth_url() -> str:
         redirect_uri=cfg["redirect_uri"],
     )
     return auth_url
-
-
+ 
+ 
 def exchange_code(code: str) -> dict | None:
     """
     Exchange ?code= for tokens.
@@ -77,8 +77,8 @@ def exchange_code(code: str) -> dict | None:
         st.error(f"SSO error: {result.get('error_description', result['error'])}")
         return None
     return result
-
-
+ 
+ 
 def _user_from_token(token_resp: dict) -> dict:
     """Extract name + email from id_token claims."""
     claims = token_resp.get("id_token_claims", {})
@@ -86,31 +86,31 @@ def _user_from_token(token_resp: dict) -> dict:
         "name":  claims.get("name") or claims.get("preferred_username", "User"),
         "email": (claims.get("preferred_username") or claims.get("email", "")).lower(),
     }
-
-
-# Streamlit gate 
-
+ 
+ 
+# Streamlit gate
+ 
 def render_sso_login() -> bool:
     """
     Call once at the top of main().
-
+ 
     Returns True  → user is authenticated, render the app normally.
     Returns False → login screen is shown, stop rendering the app body.
-
+ 
     State written to st.session_state on successful login:
       logged_in    : True
       user_name    : display name from Microsoft
       user_email   : company email (used for JD segregation)
       access_token : Bearer token for Graph API calls if needed later
     """
-    # Already authenticated 
+    # Already authenticated
     if st.session_state.get("logged_in"):
         return True
-
+ 
     if not MSAL_AVAILABLE:
         st.error("msal is not installed. Run:  pip install msal")
         return False
-
+ 
     cfg = _cfg()
     if not cfg["tenant_id"] or not cfg["client_id"]:
         st.error(
@@ -119,8 +119,8 @@ def render_sso_login() -> bool:
             "and AZURE_REDIRECT_URI in your .env or Streamlit secrets."
         )
         return False
-
-    # Microsoft redirected back with ?code= 
+ 
+    # Microsoft redirected back with ?code=
     code = st.query_params.get("code")
     if code:
         with st.spinner("Completing sign-in…"):
@@ -134,15 +134,15 @@ def render_sso_login() -> bool:
             st.query_params.clear()   # remove ?code= from URL
             st.rerun()
         return False
-
-    # Not logged in — show sign-in screen 
+ 
+    # Not logged in — show sign-in screen
     _, logo_col, _ = st.columns([1, 1, 1])
     with logo_col:
         try:
             st.image("logo.png", use_container_width=True)
         except Exception:
             st.markdown("## NexTurn")
-
+ 
     st.markdown(
         "<h1 style='text-align:center;font-size:2.4rem;font-weight:900;"
         "color:#0f172a;margin-bottom:4px;'>Resume Screening System</h1>"
@@ -151,7 +151,7 @@ def render_sso_login() -> bool:
         "<hr style='border:none;border-top:2px solid #e2e8f0;margin-bottom:32px;'>",
         unsafe_allow_html=True,
     )
-
+ 
     _, col, _ = st.columns([1, 1.4, 1])
     with col:
         auth_url = get_auth_url()
@@ -170,13 +170,13 @@ def render_sso_login() -> bool:
             unsafe_allow_html=True,
         )
     return False
-
-
+ 
+ 
 def render_user_badge():
     """Sidebar widget: shows signed-in user name/email + Sign Out button."""
     name  = st.session_state.get("user_name",  "User")
     email = st.session_state.get("user_email", "")
-
+ 
     st.sidebar.markdown(
         f"<div style='background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;"
         f"padding:10px 12px;margin-bottom:12px;'>"

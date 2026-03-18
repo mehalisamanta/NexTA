@@ -24,7 +24,7 @@ except ImportError:
 
 from config.settings import PAGE_CONFIG, CUSTOM_CSS
 from backend.openai_client import init_openai_client
-from backend.sso import render_sso_login, render_user_badge
+from frontend.sso import render_sso_login, render_user_badge
 from frontend.tabs import render_upload_tab, render_analytics_tab
 from frontend.analysis_tab import render_analysis_tab
 from frontend.candidate_pool_tab import render_candidate_pool_tab
