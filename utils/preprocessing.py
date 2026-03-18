@@ -8,7 +8,6 @@ import json
 import re
 import streamlit as st
 from backend.openai_client import create_openai_completion
-from utils.debug_log import debug_log
 
 
 # Contact-info extractors
@@ -446,12 +445,6 @@ Resume text:
 
     except Exception as e:
         st.warning(f"Could not parse {filename} with AI: {e}. Falling back to local extraction.")
-        debug_log(
-            location="utils/preprocessing.py:parse_resume_with_openai:ai_failed",
-            message="AI parse failed, using local fallback",
-            hypothesis_id="H1",
-            data={"filename": filename, "error": repr(e)},
-        )
         # Build a minimal dict from local extraction so we always return something
         data = {
             "name":             local.get("name", ""),
@@ -550,32 +543,7 @@ Resume text:
                 fill_log["current_role"] = "from_project"
                 break
 
-    # 9. Log debug info 
-    try:
-        debug_log(
-            location="utils/preprocessing.py:parse_resume_with_openai:complete",
-            message="resume parse complete",
-            hypothesis_id="H1",
-            data={
-                "filename": filename,
-                "mask_pii": bool(mask_pii),
-                "has_name":     not _is_empty(data.get("name")),
-                "has_email":    not _is_empty(data.get("email")),
-                "has_phone":    not _is_empty(data.get("phone")),
-                "has_skills":   not _is_empty(data.get("tech_stack")),
-                "has_education": not _is_empty(data.get("education")),
-                "exp_years":    data.get("experience_years"),
-                "projects_filled": sum(
-                    1 for p in data["key_projects"]
-                    if isinstance(p, dict) and (p.get("title") or "").strip()
-                ),
-                "fill_log": fill_log,
-            },
-        )
-    except Exception:
-        pass
-
-    # 10. Final metadata 
+    # 9. Final metadata 
     data["submission_date"] = upload_date
     data["source_file"]     = filename
     return data

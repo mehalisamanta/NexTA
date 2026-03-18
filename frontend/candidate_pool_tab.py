@@ -11,7 +11,6 @@ from utils.scoring import format_dataframe_for_display
 from utils.sharepoint import SHAREPOINT_AVAILABLE, save_csv_to_sharepoint
 from frontend.analysis_tab import _valid_email as _is_valid_email
 from frontend.analysis_tab import _valid_phone as _is_valid_phone
-from utils.debug_log import debug_log
 
 
 def _sp_config():

@@ -16,54 +16,10 @@ import re
 import streamlit as st
 
 from backend.openai_client import create_openai_completion
-from utils.debug_log import debug_log
 from utils.preprocessing import parse_resume_locally
 
 
-def _agent_debug_log(message: str, data: dict | None = None, hypothesis_id: str = "H1") -> None:
-    # #region agent log
-    try:
-        debug_log(
-            location="utils/resume_formatter.py:_agent_debug_log",
-            message=message,
-            hypothesis_id=hypothesis_id,
-            data=data or {},
-        )
-    except Exception:
-        pass
-    # #endregion
-
-
 def _import_docx_document():
-    _agent_debug_log(
-        "docx import probe: python/runtime",
-        {
-            "sys_executable": sys.executable,
-            "python_version": sys.version.split(" ")[0],
-            "cwd": os.getcwd(),
-            "sys_path_head": sys.path[:8],
-        },
-        hypothesis_id="H0",
-    )
-
-    try:
-        import docx as docx_mod  # type: ignore[import]
-    except Exception as e:
-        _agent_debug_log("failed to import top-level docx module", {"error": repr(e)}, hypothesis_id="H1")
-        raise
-
-    try:
-        from docx import Document  # type: ignore[import]
-        _agent_debug_log("resolved Document from docx __init__", {"source": "docx.__init__"}, hypothesis_id="H1")
-    except Exception as e_init:
-        try:
-            from docx.api import Document  # type: ignore[import]
-            _agent_debug_log("resolved Document from docx.api", {"source": "docx.api"}, hypothesis_id="H1")
-        except Exception as e_api:
-            raise ImportError(
-                "Could not import Document from python-docx. "
-                "Uninstall the legacy 'docx' package and ensure 'python-docx' is installed."
-            ) from e_api
 
     from docx.oxml.ns import qn  # type: ignore[import]
     return Document, qn
@@ -159,18 +115,6 @@ Resume:
     except Exception:
         local = {}
 
-    _agent_debug_log(
-        "extract_detailed_resume_data:entry",
-        {
-            "resume_text_len": len(resume_text or ""),
-            "has_education_keyword": "education" in (resume_text or "").lower(),
-            "has_degree_keyword": bool(re.search(r"(?i)\\b(bachelor|master|ph\\.?d|b\\.?\\s*tech|m\\.?\\s*tech|b\\.?\\s*e\\.?|m\\.?\\s*e\\.?|b\\.?\\s*sc\\.?|m\\.?\\s*sc\\.?|mba|diploma)\\b", resume_text or "")),
-            "local_education_empty": not bool(str(local.get("education") or "").strip()),
-            "meta_education_empty": not bool(str((candidate_meta or {}).get("education") or "").strip()),
-        },
-        hypothesis_id="H7",
-    )
-
     data = None
     try:
         response = create_openai_completion(
@@ -224,20 +168,6 @@ Resume:
             data["tech_stack"] = [str(s).strip() for s in meta_ts if s]
         else:
             data["tech_stack"] = []
-
-    _agent_debug_log(
-        "extract_detailed_resume_data:post_fill",
-        {
-            "highest_education_empty": _empty(data.get("HIGHEST_EDUCATION")),
-            "highest_education_len": len(str(data.get("HIGHEST_EDUCATION") or "")),
-            "college_name_empty": _empty(data.get("COLLEGE_NAME")),
-            "education_dates_empty": _empty(data.get("EDUCATION_DATES")),
-            "tech_stack_len": len(data.get("tech_stack") or []) if isinstance(data.get("tech_stack"), list) else None,
-            "name_empty": _empty(data.get("NAME")),
-            "role_empty": _empty(data.get("ROLE")),
-        },
-        hypothesis_id="H7",
-    )
 
     # If TECHNOLOGIES_USED is empty, derive from tech_stack 
     if _empty(data.get("TECHNOLOGIES_USED")) and data.get("tech_stack"):

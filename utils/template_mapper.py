@@ -4,8 +4,6 @@ Maps candidate data into the flat key format expected by ppt_generator.py.
 
 """
 
-from utils.debug_log import debug_log
-
 
 def _is_empty(val) -> bool:
     """Return True if val is effectively absent / a placeholder."""
@@ -168,21 +166,5 @@ def map_to_template_format(parsed_data: dict) -> dict:
         "CERTIFICATIONS":       _get("certifications", "CERTIFICATIONS"),
         **projects_map,
     }
-
-    # Debug log 
-    debug_log(
-        location="utils/template_mapper.py:map_to_template_format",
-        message="mapped candidate data for PPT placeholders",
-        hypothesis_id="H9",
-        data={
-            "using_key_projects": using_key_projects,
-            "key_projects_len":   len(projects) if isinstance(projects, list) else None,
-            "full_name_empty":    _is_empty(mapped.get("FULL_NAME")),
-            "education_empty":    _is_empty(mapped.get("EDUCATION_DETAILS")),
-            "proj1_name_empty":   _is_empty(mapped.get("PROJECT1_NAME")),
-            "proj1_resp_empty":   _is_empty(mapped.get("PROJECT1_RESPONSIBILITIES")),
-            "skills_empty":       _is_empty(mapped.get("TECHNICAL_SKILLS")),
-        },
-    )
 
     return mapped
