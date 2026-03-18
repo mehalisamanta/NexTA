@@ -7,8 +7,8 @@ import io
 from datetime import datetime
 import streamlit as st
 import pandas as pd
-from utils.scoring import format_dataframe_for_display
-from utils.sharepoint import SHAREPOINT_AVAILABLE, save_csv_to_sharepoint
+from backend.scoring import format_dataframe_for_display
+from backend.sharepoint import SHAREPOINT_AVAILABLE, save_csv_to_sharepoint
 from frontend.analysis_tab import _valid_email as _is_valid_email
 from frontend.analysis_tab import _valid_phone as _is_valid_phone
 

@@ -11,10 +11,10 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 
-from utils.file_handlers import extract_text_from_file
-from utils.preprocessing import parse_resume_with_openai
-from utils.scoring import format_dataframe_for_display
-from utils.sharepoint import (
+from backend.file_handlers import extract_text_from_file
+from backend.preprocessing import parse_resume_with_openai
+from backend.scoring import format_dataframe_for_display
+from backend.sharepoint import (
     SHAREPOINT_AVAILABLE,
     download_from_sharepoint,
     save_csv_to_sharepoint,

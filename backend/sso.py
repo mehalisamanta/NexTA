@@ -139,7 +139,7 @@ def render_sso_login() -> bool:
     _, logo_col, _ = st.columns([1, 1, 1])
     with logo_col:
         try:
-            st.image("logo.png", use_container_width=True)
+            st.image("inputs/logo.png", use_container_width=True)
         except Exception:
             st.markdown("## NexTurn")
 
