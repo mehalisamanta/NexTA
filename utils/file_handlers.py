@@ -48,7 +48,7 @@ def extract_text_from_file(uploaded_file):
         st.warning(f"⚠️ Unsupported file format: {file_ext}. Please upload PDF or DOCX files only.")
         return ""
 
-    # #region agent log
+    # region agent log
     try:
         # Do NOT log resume content; only structural signals.
         email_found = bool(_re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", text or ""))
@@ -68,6 +68,6 @@ def extract_text_from_file(uploaded_file):
         )
     except Exception:
         pass
-    # #endregion
+    # endregion
 
     return text

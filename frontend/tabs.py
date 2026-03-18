@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 
 from utils.file_handlers import extract_text_from_file
 from utils.preprocessing import parse_resume_with_openai
+from utils.debug_log import debug_log
 from utils.scoring import format_dataframe_for_display
 from utils.sharepoint import (
     SHAREPOINT_AVAILABLE,
@@ -20,6 +21,15 @@ from utils.sharepoint import (
     save_csv_to_sharepoint,
 )
 from config.settings import COLUMN_DISPLAY_NAMES
+
+# region agent log
+debug_log(
+    location="frontend/tabs.py:module_import",
+    message="tabs module imported",
+    hypothesis_id="H8",
+    data={},
+)
+# endregion
 
 
 def _sp_config():
@@ -37,6 +47,20 @@ def render_upload_tab():
 
     client           = st.session_state.get("client")
     mask_pii_enabled = st.session_state.get("mask_pii_enabled", True)
+
+    # region agent log
+    debug_log(
+        location="frontend/tabs.py:render_upload_tab:render",
+        message="upload tab rendered",
+        hypothesis_id="H6",
+        data={
+            "client_present": bool(client),
+            "mask_pii_enabled": bool(mask_pii_enabled),
+            "upload_method_radio": st.session_state.get("upload_method_radio", ""),
+            "parsed_resumes_len": len(st.session_state.get("parsed_resumes", []) or []),
+        },
+    )
+    # endregion
 
     upload_method = st.radio(
         "Where are the resumes coming from?",
@@ -61,6 +85,17 @@ def render_upload_tab():
         st.success("✅ SharePoint Connected")
 
         if st.button("📥 Get All Resumes from SharePoint", type="primary"):
+            # region agent log
+            debug_log(
+                location="frontend/tabs.py:render_upload_tab:sharepoint_clicked",
+                message="sharepoint resume retrieval started",
+                hypothesis_id="H6",
+                data={
+                    "client_present": bool(client),
+                    "mask_pii_enabled": bool(mask_pii_enabled),
+                },
+            )
+            # endregion
             with st.spinner("Fetching resumes from SharePoint…"):
                 sp               = _sp_config()
                 downloaded_files = download_from_sharepoint(sp)
@@ -108,6 +143,17 @@ def render_upload_tab():
                             failed_files.append((file_data["name"], "Could not extract text"))
                             progress.progress((idx + 1) / len(downloaded_files))
                             continue
+                        # region agent log
+                        debug_log(
+                            location="frontend/tabs.py:render_upload_tab:sharepoint_file_text",
+                            message="sharepoint file text extracted (pre-parse)",
+                            hypothesis_id="H6",
+                            data={
+                                "filename": file_data.get("name", ""),
+                                "text_len": len(text or ""),
+                            },
+                        )
+                        # endregion
 
                         upload_date = file_data.get("timestamp", datetime.now().isoformat())
                         if isinstance(upload_date, str):
@@ -125,6 +171,22 @@ def render_upload_tab():
                             failed_files.append((file_data["name"], "AI parsing returned no data"))
                             progress.progress((idx + 1) / len(downloaded_files))
                             continue
+                        # region agent log
+                        debug_log(
+                            location="frontend/tabs.py:render_upload_tab:sharepoint_file_parsed",
+                            message="sharepoint file parsed (post-parse)",
+                            hypothesis_id="H6",
+                            data={
+                                "filename": file_data.get("name", ""),
+                                "parsed_keys_sample": list(parsed.keys())[:20],
+                                "name_empty": not bool((parsed.get("name") or "").strip()),
+                                "email_empty": not bool((parsed.get("email") or "").strip()),
+                                "phone_empty": not bool((parsed.get("phone") or "").strip()),
+                                "skills_empty": not bool(str(parsed.get("tech_stack") or "").strip()),
+                                "education_empty": not bool(str(parsed.get("education") or "").strip()),
+                            },
+                        )
+                        # endregion
 
                         cname = parsed.get("name", "").strip().lower()
                         if cname and cname in seen_names:
@@ -180,6 +242,18 @@ def render_upload_tab():
 
         if uploaded_files and client:
             if st.button("🚀 Read All Resumes", type="primary"):
+                # #region agent log
+                debug_log(
+                    location="frontend/tabs.py:render_upload_tab:manual_clicked",
+                    message="manual resume processing started",
+                    hypothesis_id="H6",
+                    data={
+                        "files_selected": len(uploaded_files or []),
+                        "client_present": bool(client),
+                        "mask_pii_enabled": bool(mask_pii_enabled),
+                    },
+                )
+                # #endregion
                 progress = st.progress(0)
                 status   = st.empty()
 
@@ -191,11 +265,38 @@ def render_upload_tab():
                     status.text(f"Reading: {file.name}")
                     text = extract_text_from_file(file)
                     if text:
+                        # #region agent log
+                        debug_log(
+                            location="frontend/tabs.py:render_upload_tab:manual_file_text",
+                            message="manual file text extracted (pre-parse)",
+                            hypothesis_id="H6",
+                            data={
+                                "filename": getattr(file, "name", ""),
+                                "text_len": len(text or ""),
+                            },
+                        )
+                        # #endregion
                         upload_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         parsed = parse_resume_with_openai(
                             client, text, file.name, mask_pii_enabled, upload_date
                         )
                         if parsed:
+                            # #region agent log
+                            debug_log(
+                                location="frontend/tabs.py:render_upload_tab:manual_file_parsed",
+                                message="manual file parsed (post-parse)",
+                                hypothesis_id="H6",
+                                data={
+                                    "filename": getattr(file, "name", ""),
+                                    "parsed_keys_sample": list(parsed.keys())[:20],
+                                    "name_empty": not bool((parsed.get("name") or "").strip()),
+                                    "email_empty": not bool((parsed.get("email") or "").strip()),
+                                    "phone_empty": not bool((parsed.get("phone") or "").strip()),
+                                    "skills_empty": not bool(str(parsed.get("tech_stack") or "").strip()),
+                                    "education_empty": not bool(str(parsed.get("education") or "").strip()),
+                                },
+                            )
+                            # #endregion
                             st.session_state.parsed_resumes.append(parsed)
                             st.session_state.resume_texts[parsed.get("name", "")] = text
                             st.session_state.resume_metadata[parsed.get("name", "")] = {

@@ -15,16 +15,39 @@ from utils.debug_log import debug_log
 
 
 def _sp_config():
-    return st.session_state.get('sharepoint_config', {})
+    return st.session_state.get("sharepoint_config", {})
+
 
 def _sp_connected():
-    return _sp_config().get('connected', False)
+    return _sp_config().get("connected", False)
+
+
+def _fmt_experience(val) -> str:
+    """
+    Format experience_years for display:
+      4.0   → "4"
+      4.5   → "4.5"
+      5.0   → "5"
+      3.75  → "3.8"   (round to 1 dp, strip trailing zero)
+      ""    → ""
+    """
+    if val is None or str(val).strip() in ("", "nan", "None", "N/A"):
+        return ""
+    try:
+        f = float(val)
+        if f == int(f):
+            return str(int(f))
+        # Round to 1 decimal place, strip any trailing zero
+        rounded = f"{f:.1f}"
+        return rounded.rstrip("0").rstrip(".")
+    except (ValueError, TypeError):
+        return str(val).strip()
 
 
 def render_candidate_pool_tab():
     st.header("👥 Candidate Pool")
 
-    selected_names = st.session_state.get('selected_for_pool', set())
+    selected_names = st.session_state.get("selected_for_pool", set())
 
     # Empty state 
     if not selected_names:
@@ -43,9 +66,9 @@ def render_candidate_pool_tab():
         """, unsafe_allow_html=True)
         return
 
-    all_resumes      = st.session_state.get('parsed_resumes', [])
-    review_results   = st.session_state.get('review_results', [])
-    selected_resumes = [r for r in all_resumes if r.get('name') in selected_names]
+    all_resumes      = st.session_state.get("parsed_resumes", [])
+    review_results   = st.session_state.get("review_results", [])
+    selected_resumes = [r for r in all_resumes if r.get("name") in selected_names]
 
     if not selected_resumes:
         st.warning("Resume data not found for selected candidates. Please go back and re-select.")
@@ -64,95 +87,67 @@ def render_candidate_pool_tab():
     </div>
     """, unsafe_allow_html=True)
 
-    # Build display table 
+    # Build display rows 
     score_map = {
-        r['metadata'].get('name'): r.get('final_score', '—')
+        r["metadata"].get("name"): r.get("final_score", "—")
         for r in review_results
     }
 
     rows = []
     for r in selected_resumes:
-        name  = r.get('name', '')
-        email = r.get('email', '')
-        phone = r.get('phone', '')
-        exp_v = r.get('experience_years', '')
+        name  = r.get("name", "")
+        email = r.get("email", "")
+        phone = r.get("phone", "")
+        exp_v = r.get("experience_years", "")
+
         rows.append({
-            'Candidate Name':   name,
-            'AI Match Score':   f"{score_map.get(name, '—')}%" if score_map.get(name) != '—' else '—',
-            'Current Role':     r.get('current_role', ''),
-            'Experience (yrs)': exp_v,
-            'Email':            email if _is_valid_email(email) else None,
-            'Phone':            phone if _is_valid_phone(phone) else None,
-            'Key Skills':       str(r.get('tech_stack', ''))[:80],
-            'Education':        r.get('education', ''),
+            "Candidate Name":   name,
+            "AI Match Score":   (
+                f"{score_map.get(name, '—')}%"
+                if score_map.get(name) not in ("—", None)
+                else "—"
+            ),
+            "Current Role":     r.get("current_role", ""),
+            "Experience (yrs)": _fmt_experience(exp_v),
+            "Email":            email if _is_valid_email(email) else None,
+            "Phone":            phone if _is_valid_phone(phone) else None,
+            "Key Skills":       str(r.get("tech_stack", ""))[:80],
+            "Education":        r.get("education", ""),
         })
 
-    try:
-        # Log a small sample to diagnose float formatting + None display
-        sample = rows[:5]
-        debug_log(
-            location="frontend/candidate_pool_tab.py:render_candidate_pool_tab:rows_built",
-            message="candidate pool rows built (sample)",
-            hypothesis_id="H3",
-            data={
-                "selected_count": len(rows),
-                "sample": [
-                    {
-                        "name": rr.get("Candidate Name", ""),
-                        "exp": rr.get("Experience (yrs)", None),
-                        "email_is_none": rr.get("Email", "x") is None,
-                        "phone_is_none": rr.get("Phone", "x") is None,
-                    }
-                    for rr in sample
-                ],
-            },
-        )
-    except Exception:
-        pass
-
     def _score_val(row):
-        s = str(row.get('AI Match Score', '0')).replace('%', '').strip()
-        try:    return float(s)
-        except: return 0
+        s = str(row.get("AI Match Score", "0")).replace("%", "").strip()
+        try:
+            return float(s)
+        except Exception:
+            return 0.0
 
     rows.sort(key=_score_val, reverse=True)
     pool_df = pd.DataFrame(rows)
 
-    # Render table with red "None" for missing contact fields 
+    # Render table 
     st.subheader("📊 Pool Overview")
+    display_df = pool_df.copy()
+    for col in ("Email", "Phone"):
+        if col in display_df.columns:
+            display_df[col] = display_df[col].fillna("Not Available")
 
-    def _style_none_red(df):
-        """Apply red colour to cells that are None/NaN in Email and Phone columns."""
+    def _style_missing(df):
+        """Red bold for 'Not Available' cells in Email / Phone columns."""
         styled = pd.DataFrame("", index=df.index, columns=df.columns)
-        for col in ["Email", "Phone"]:
+        for col in ("Email", "Phone"):
             if col in df.columns:
-                mask = df[col].isna() | (df[col] == "")
+                mask = df[col] == "Not Available"
                 styled.loc[mask, col] = "color: #DC2626; font-weight: 600;"
         return styled
 
-    # Fill None with display text "None" for the styled table
-    display_df = pool_df.copy()
-    for col in ["Email", "Phone"]:
-        if col in display_df.columns:
-            display_df[col] = display_df[col].fillna("None")
-
-    styled = display_df.style.apply(
-        lambda _: [
-            "color: #DC2626; font-weight: 600;"
-            if display_df.loc[row_idx, col] == "None" and col in ("Email", "Phone")
-            else ""
-            for col in display_df.columns
-        ],
-        axis=1,
-        result_type="expand",
+    st.dataframe(
+        display_df.style.apply(_style_missing, axis=None),
+        use_container_width=True,
+        hide_index=True,
     )
-    # Rename columns to match display_df
-    styled.columns = display_df.columns
 
-    st.dataframe(display_df.style.apply(_style_none_red, axis=None),
-                 use_container_width=True, hide_index=True)
-
-    # Download & SharePoint 
+    # Export 
     st.markdown("#### 💾 Export Pool Data")
 
     csv_buf = io.StringIO()
@@ -167,7 +162,7 @@ def render_candidate_pool_tab():
             data=csv_bytes,
             file_name="candidate_pool.csv",
             mime="text/csv",
-            use_container_width=True
+            use_container_width=True,
         )
 
     with col_sp:
@@ -185,5 +180,5 @@ def render_candidate_pool_tab():
                 "☁️ Save to SharePoint",
                 use_container_width=True,
                 disabled=True,
-                help="Connect SharePoint in the sidebar to enable this."
+                help="Connect SharePoint in the sidebar to enable this.",
             )

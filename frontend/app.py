@@ -16,8 +16,6 @@ for _root in (_by_file, _by_cwd):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from utils.debug_log import debug_log
-
 try:
     from dotenv import load_dotenv
     load_dotenv(override=True)
@@ -134,6 +132,25 @@ def main():
     _init_openai()
     _init_sharepoint()
 
+    # region agent log
+    try:
+        st.session_state["_run_counter"] = int(st.session_state.get("_run_counter", 0)) + 1
+        debug_log(
+            location="frontend/app.py:main:run",
+            message="main() executed",
+            hypothesis_id="H8",
+            data={
+                "run_counter": st.session_state.get("_run_counter"),
+                "has_client": st.session_state.get("client") is not None,
+                "upload_method_radio": st.session_state.get("upload_method_radio", ""),
+                "parsed_resumes_len": len(st.session_state.get("parsed_resumes", []) or []),
+                "review_results_present": bool(st.session_state.get("review_results")),
+            },
+        )
+    except Exception:
+        pass
+    # endregion
+
     # Header 
     st.markdown('<div class="nexturn-header">', unsafe_allow_html=True)
     try:
@@ -249,12 +266,28 @@ def main():
     ])
 
     with tab1:
+        # #region agent log
+        debug_log(
+            location="frontend/app.py:tabs:tab1",
+            message="entering Upload tab block",
+            hypothesis_id="H8",
+            data={},
+        )
+        # #endregion
         render_upload_tab()
 
     with tab2:
         parsed = st.session_state.get("parsed_resumes", [])
         client = st.session_state.get("client")
         if parsed and client:
+            # #region agent log
+            debug_log(
+                location="frontend/app.py:tabs:tab2",
+                message="entering Candidate Review tab block (render_analysis_tab)",
+                hypothesis_id="H8",
+                data={"parsed_resumes_len": len(parsed)},
+            )
+            # #endregion
             render_analysis_tab(parsed, client)
         else:
             st.info(
