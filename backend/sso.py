@@ -5,8 +5,6 @@ Microsoft SSO Authentication
 """
 
 import os
-import json
-import time
 from urllib.parse import urlparse
 
 import streamlit as st
@@ -39,37 +37,6 @@ def _cfg() -> dict:
     }
 
 
-def _agent_debug_log(message: str, data: dict | None = None, hypothesis_id: str = "H_iframe") -> None:
-    """
-    Append a minimal NDJSON debug line for this session.
-
-    Used here to validate how SSO login is rendered in Streamlit Cloud.
-    """
-
-    # #region agent log
-    try:
-        payload = {
-            "sessionId": "ab086e",
-            "runId": "pre-fix",
-            "hypothesisId": hypothesis_id,
-            "location": "backend/sso.py:40",
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time.time() * 1000),
-        }
-        line = json.dumps(payload, separators=(",", ":")) + "\n"
-        with open(
-            "/Users/rishiraj/Desktop/New folder/.cursor/debug-ab086e.log",
-            "a",
-            encoding="utf-8",
-        ) as fp:
-            fp.write(line)
-    except Exception:
-        # Logging must never affect auth flow.
-        pass
-    # #endregion
-
-
 def _msal_app(cfg: dict):
     """Build a ConfidentialClientApplication from config."""
     authority = f"https://login.microsoftonline.com/{cfg['tenant_id']}"
@@ -92,15 +59,6 @@ def get_auth_url() -> str:
         scopes=_SCOPES,
         redirect_uri=cfg["redirect_uri"],
     )
-    # Log only host + path, never full query (may contain secrets/state).
-    try:
-        parsed = urlparse(auth_url)
-        _agent_debug_log(
-            "generated auth URL",
-            {"netloc": parsed.netloc, "path": parsed.path},
-        )
-    except Exception:
-        _agent_debug_log("generated auth URL (parse_failed)")
     return auth_url
 
 
@@ -110,7 +68,6 @@ def exchange_code(code: str) -> dict | None:
     Returns the full token response dict, or None on failure.
     """
     cfg    = _cfg()
-    _agent_debug_log("attempting token exchange", {"has_code": bool(code)})
     result = _msal_app(cfg).acquire_token_by_authorization_code(
         code,
         scopes=_SCOPES,
@@ -148,7 +105,6 @@ def render_sso_login() -> bool:
     """
     # Already authenticated 
     if st.session_state.get("logged_in"):
-        _agent_debug_log("user already authenticated", hypothesis_id="H_iframe")
         return True
 
     if not MSAL_AVAILABLE:
@@ -167,7 +123,6 @@ def render_sso_login() -> bool:
     # Microsoft redirected back with ?code= 
     code = st.query_params.get("code")
     if code:
-        _agent_debug_log("received auth code in query params", {"has_code": True})
         with st.spinner("Completing sign-in…"):
             token_resp = exchange_code(code)
         if token_resp:
@@ -176,10 +131,6 @@ def render_sso_login() -> bool:
             st.session_state["user_name"]    = user["name"]
             st.session_state["user_email"]   = user["email"]
             st.session_state["access_token"] = token_resp.get("access_token", "")
-            _agent_debug_log(
-                "login successful, session_state updated",
-                {"has_access_token": bool(st.session_state["access_token"])},
-            )
             st.query_params.clear()   # remove ?code= from URL
             st.rerun()
         return False
@@ -204,15 +155,6 @@ def render_sso_login() -> bool:
     _, col, _ = st.columns([1, 1.4, 1])
     with col:
         auth_url = get_auth_url()
-        # On Streamlit Cloud the app often runs inside an iframe. Navigating
-        # only the inner frame to login.microsoftonline.com causes the browser
-        # to block the page with “refused to connect” due to X-Frame-Options.
-        # target="_top" breaks out of the iframe and loads the Microsoft login
-        # in the top-level window instead.
-        _agent_debug_log(
-            "rendering SSO login button",
-            {"target": "_top"},
-        )
         st.markdown(
             f'<a href="{auth_url}" target="_top" style="text-decoration:none;color:white;">'
             '<div style="background:#464EB8;color:white;font-weight:700;'

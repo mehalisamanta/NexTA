@@ -17,7 +17,6 @@ from utils.resume_formatter import (
 )
 from utils.ppt_generator import generate_candidate_ppt
 from utils.template_mapper import map_to_template_format
-from utils.debug_log import debug_log
 from utils.sharepoint import (
     SHAREPOINT_AVAILABLE,
     upload_jd_to_sharepoint,
@@ -27,33 +26,10 @@ from utils.sharepoint import (
 )
 from backend.openai_client import create_openai_completion
 
-# region agent log
-debug_log(
-    location="frontend/analysis_tab.py:module_import",
-    message="analysis_tab module imported",
-    hypothesis_id="H8",
-    data={},
-)
-
-
 # Entry point 
 
 def render_analysis_tab(parsed_resumes, client):
     st.header("🎯 Candidate Review & Scoring")
-
-    try:
-        debug_log(
-            location="frontend/analysis_tab.py:render_analysis_tab",
-            message="rendered analysis tab",
-            hypothesis_id="H6",
-            data={
-                "parsed_resumes_len": len(parsed_resumes) if isinstance(parsed_resumes, list) else None,
-                "client_present": client is not None,
-                "has_review_results": bool(st.session_state.get("review_results")),
-            },
-        )
-    except Exception:
-        pass
 
     st.markdown("""
     <div style="background:#F0F7FF;padding:16px 22px;border-radius:10px;
@@ -238,18 +214,6 @@ def _render_sharepoint_jd_panel():
 
 def _run_full_analysis(parsed_resumes, client, job_desc):
     """Score every candidate, sort highest first, pre-generate all docs."""
-    try:
-        debug_log(
-            location="frontend/analysis_tab.py:_run_full_analysis:entry",
-            message="started full analysis run",
-            hypothesis_id="H6",
-            data={
-                "job_desc_len": len(job_desc or ""),
-                "parsed_resumes_len": len(parsed_resumes) if isinstance(parsed_resumes, list) else None,
-            },
-        )
-    except Exception:
-        pass
 
     st.session_state.review_results    = []
     st.session_state.selected_for_pool = set()
@@ -344,22 +308,6 @@ def _run_full_analysis(parsed_resumes, client, job_desc):
 
         if ppt_key not in st.session_state:
             try:
-                try:
-                    mapped_from_meta = map_to_template_format(item["metadata"])
-                    mapped_from_det  = map_to_template_format(detailed)
-                    debug_log(
-                        location="frontend/analysis_tab.py:_run_full_analysis:ppt_prep",
-                        message="preparing PPT mapping",
-                        hypothesis_id="H2",
-                        data={
-                            "candidate": name,
-                            "meta_project1": (mapped_from_meta.get("PROJECT1_NAME") or "")[:80],
-                            "det_project1":  (mapped_from_det.get("PROJECT1_NAME") or "")[:80],
-                        },
-                    )
-                except Exception:
-                    pass
-
                 mapped = map_to_template_format(detailed)
                 st.session_state[ppt_key] = generate_candidate_ppt({**detailed, **mapped})
             except Exception:
@@ -699,25 +647,6 @@ def _render_doc_buttons(client, name, meta, idx):
     with col_ppt:
         pptx_bytes = st.session_state.get(ppt_key)
         if pptx_bytes:
-            # region agent log
-            try:
-                debug_log(
-                    location="frontend/analysis_tab.py:_render_doc_buttons:ppt_ready",
-                    message="PPT bytes available for download",
-                    hypothesis_id="H5",
-                    data={
-                        "candidate": name,
-                        "ppt_bytes_len": len(pptx_bytes) if pptx_bytes else 0,
-                        "name_empty": not bool((meta.get("name") or "").strip()),
-                        "email_empty": not bool((meta.get("email") or "").strip()),
-                        "phone_empty": not bool((meta.get("phone") or "").strip()),
-                        "skills_empty": not bool(str(meta.get("tech_stack") or "").strip()),
-                        "education_empty": not bool(str(meta.get("education") or "").strip()),
-                    },
-                )
-            except Exception:
-                pass
-            # endregion
             st.download_button(
                 "⬇️ Download PPT Profile", data=pptx_bytes,
                 file_name=f"{safe}_profile.pptx",
