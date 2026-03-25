@@ -37,13 +37,6 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# ── Test / temp outputs ───────────────────────────────────────────────────────
-*.docx
-*.pptx
-*.csv
-!templates/word_template.docx
-!templates/sample_ppt_template.pptx
-
 # ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 logs/
