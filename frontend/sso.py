@@ -156,12 +156,17 @@ def render_sso_login() -> bool:
     with col:
         auth_url = get_auth_url()
         st.markdown(
-            f'<a href="{auth_url}" target="_top" style="text-decoration:none;color:white;">'
-            '<div style="background:#464EB8;color:white;font-weight:700;'
-            'font-size:1.25rem;text-align:center;padding:14px 20px;'
-            'border-radius:8px;cursor:pointer;margin-top:8px;">'
-            "&nbsp; Sign in with Microsoft"
-            "</div></a>",
+            f"""
+            <a href="{auth_url}" 
+            onclick="window.top.location.href='{auth_url}'; return false;"
+            style="text-decoration:none;color:white;">
+                <div style="background:#464EB8;color:white;font-weight:700;
+                font-size:1.25rem;text-align:center;padding:14px 20px;
+                border-radius:8px;cursor:pointer;margin-top:8px;">
+                    &nbsp; Sign in with Microsoft
+                </div>
+            </a>
+            """,
             unsafe_allow_html=True,
         )
         st.markdown(
