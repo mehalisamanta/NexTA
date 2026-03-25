@@ -16,7 +16,7 @@ from lxml import etree
 
 TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "templates", "sample_ppt_template.pptx"
+    "inputs", "sample_ppt_template.pptx"
 )
 
 BLACK = RGBColor(0x00, 0x00, 0x00)

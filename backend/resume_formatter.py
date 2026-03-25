@@ -37,7 +37,7 @@ Document, qn = _import_docx_document()
 # Template path
 TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "templates", "word_template.docx"
+    "inputs", "word_template.docx"
 )
 
 # LLM extraction
